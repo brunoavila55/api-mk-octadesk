@@ -3,6 +3,13 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     restart: unless-stopped
+    environment:
+      # Sem isso, o Ollama descarrega o modelo da memória após 5 min sem uso
+      # (padrão) e a próxima mensagem paga o custo de recarregar ~2GB de
+      # tensores do zero — na prática, minutos de espera para o cliente, já
+      # que mensagens de chat não chegam com frequência garantida. A VM tem
+      # RAM de sobra (32GB) para manter o modelo sempre residente.
+      - OLLAMA_KEEP_ALIVE=-1
     volumes:
       - ollama-data:/root/.ollama
       - ./ollama:/modelfiles:ro
