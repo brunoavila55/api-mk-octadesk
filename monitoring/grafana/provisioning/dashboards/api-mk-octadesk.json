@@ -255,6 +255,72 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 15,
+      "title": "Host — CPU em uso (%)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 124 },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+          "legendFormat": "CPU em uso",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "Host — Memória em uso (%)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 124 },
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "min": 0, "max": 100 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))",
+          "legendFormat": "Memória em uso",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Host — RAM disponível (GB)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 132 },
+      "fieldConfig": {
+        "defaults": { "unit": "decgbytes" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "node_memory_MemAvailable_bytes / 1024 / 1024 / 1024",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Host — núcleos de CPU",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 132 },
+      "targets": [
+        {
+          "expr": "count(count by (cpu) (node_cpu_seconds_total{mode=\"idle\"}))",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "templating": {
