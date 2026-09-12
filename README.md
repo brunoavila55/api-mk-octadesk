@@ -46,9 +46,27 @@ histórico, sem pergunta anterior) e devolve o setor de destino:
 {"status": "ok", "dados": {"destino": "suporte"}}
 ```
 
-`dados.destino` é sempre um de `vendas`, `financeiro`, `suporte` ou
-`atendimento` — o flow do Octadesk usa esse valor num if/else para tagear a
-conversa. Esta rota:
+`dados.destino` é sempre uma destas 4 strings (usar exatamente esses valores
+no if/else do flow do Octadesk):
+
+| `destino` | Quando a LLM classifica assim | Exemplos de mensagem |
+|---|---|---|
+| `suporte` | Sem internet/serviço, conexão caindo ou lenta, modem/roteador com problema, Wi-Fi não conecta | "estou sem internet", "a net caiu", "modem com luz vermelha" |
+| `financeiro` | Boleto, segunda via, fatura, pagamento, PIX, cobrança, vencimento | "quero a segunda via do boleto", "me manda o pix", "minha fatura venceu" |
+| `vendas` | Endereço/localização/cobertura, contratação, planos, nova instalação, mudança de endereço | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?" |
+| `atendimento` | Mensagem sem informação suficiente pra decidir com segurança (saudações, agradecimentos, pedido genérico, fragmento ambíguo) — a LLM prefere isso a arriscar um chute | "bom dia", "oi", "tenho uma dúvida", "centro" (sozinho, sem mais contexto) |
+
+Se houver mais de uma intenção na mesma mensagem (ex.: "sem internet e
+preciso do boleto"), a LLM decide sozinha o `destino` mais urgente, nesta
+prioridade: `suporte` > `financeiro` > `vendas` > `atendimento`.
+
+Em caso de erro/timeout na chamada (ver lista de códigos abaixo), a rota não
+devolve nenhum desses 4 valores — devolve `status: "erro"` com HTTP 502/504,
+e o flow deve tratar isso caindo na fila de humanos em vez de tentar ler
+`dados.destino`.
+
+`dados.destino` é o campo que o flow do Octadesk usa num if/else para tagear
+a conversa. Esta rota:
 
 - **não chama o MK** (não importa `internal/mk`);
 - **não chama a API do Octadesk de volta** — quem tageia a conversa é o
