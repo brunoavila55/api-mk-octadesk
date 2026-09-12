@@ -67,6 +67,11 @@ services:
       - traefik.http.routers.mk-octa-autodesbloqueio.tls=true
       - traefik.http.routers.mk-octa-autodesbloqueio.tls.certresolver=letsencrypt
 
+      - "traefik.http.routers.mk-octa-llm-classifica-mensagem.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/llm-classifica-mensagem`)"
+      - traefik.http.routers.mk-octa-llm-classifica-mensagem.entrypoints=websecure
+      - traefik.http.routers.mk-octa-llm-classifica-mensagem.tls=true
+      - traefik.http.routers.mk-octa-llm-classifica-mensagem.tls.certresolver=letsencrypt
+
       - traefik.http.services.mk-octa-api.loadbalancer.server.port=8080
 
 networks:
