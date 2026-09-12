@@ -1,0 +1,7 @@
+.env
+/bin/
+*.log
+
+# Referência histórica local (SvelteKit antigo) — contém credenciais mortas
+# em texto puro; mantido só no disco, nunca versionado.
+/old_api/

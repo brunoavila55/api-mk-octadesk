@@ -1,0 +1,74 @@
+package httpapi
+
+import (
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+// apiMetrics agrega as métricas Prometheus da API. Além do padrão HTTP básico
+// (requisições, duração, em andamento), mantém um contador por código de erro
+// do MK, para diferenciar timeout/indisponibilidade/registro-não-encontrado
+// sem nunca usar documento, telefone ou nome como label.
+type apiMetrics struct {
+	requestsTotal   *prometheus.CounterVec
+	requestDuration *prometheus.HistogramVec
+	inFlight        prometheus.Gauge
+	mkErrorsTotal   *prometheus.CounterVec
+	handler         http.Handler
+}
+
+// newAPIMetrics usa um registry Prometheus próprio (em vez do registry global
+// padrão), para que múltiplas instâncias do handler no mesmo processo — como
+// acontece nos testes — não colidam registrando a mesma métrica duas vezes.
+func newAPIMetrics() *apiMetrics {
+	registry := prometheus.NewRegistry()
+	factory := promauto.With(registry)
+
+	return &apiMetrics{
+		requestsTotal: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "mk_octadesk_http_requests_total",
+			Help: "Total de requisições HTTP recebidas, por rota e status HTTP.",
+		}, []string{"route", "status"}),
+		requestDuration: factory.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "mk_octadesk_http_request_duration_seconds",
+			Help:    "Duração das requisições HTTP, por rota.",
+			Buckets: prometheus.DefBuckets,
+		}, []string{"route"}),
+		inFlight: factory.NewGauge(prometheus.GaugeOpts{
+			Name: "mk_octadesk_http_in_flight_requests",
+			Help: "Requisições HTTP em andamento.",
+		}),
+		mkErrorsTotal: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "mk_octadesk_mk_errors_total",
+			Help: "Total de erros ao consultar o MK, por rota e código de erro interno.",
+		}, []string{"route", "codigo"}),
+		handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
+	}
+}
+
+func (metrics *apiMetrics) recordMKError(route, codigo string) {
+	metrics.mkErrorsTotal.WithLabelValues(route, codigo).Inc()
+}
+
+// instrument mede toda requisição atendida por next. A rota usada como label
+// é o caminho da URL, que nunca contém dados de cliente (esses vão só na
+// query string, que não é usada como label).
+func (metrics *apiMetrics) instrument(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		metrics.inFlight.Inc()
+		defer metrics.inFlight.Dec()
+
+		started := time.Now()
+		recorder := &statusRecorder{ResponseWriter: writer, status: http.StatusOK}
+		next.ServeHTTP(recorder, request)
+
+		route := request.URL.Path
+		metrics.requestsTotal.WithLabelValues(route, strconv.Itoa(recorder.status)).Inc()
+		metrics.requestDuration.WithLabelValues(route).Observe(time.Since(started).Seconds())
+	})
+}

@@ -1,0 +1,59 @@
+services:
+  api:
+    build: .
+    container_name: api-mk-octadesk
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "8080"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+
+      - "traefik.http.routers.mk-octa-consulta-documento.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/consulta-documento`)"
+      - traefik.http.routers.mk-octa-consulta-documento.entrypoints=websecure
+      - traefik.http.routers.mk-octa-consulta-documento.tls=true
+      - traefik.http.routers.mk-octa-consulta-documento.tls.certresolver=letsencrypt
+
+      - "traefik.http.routers.mk-octa-consulta-conexao.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/consulta-conexao`)"
+      - traefik.http.routers.mk-octa-consulta-conexao.entrypoints=websecure
+      - traefik.http.routers.mk-octa-consulta-conexao.tls=true
+      - traefik.http.routers.mk-octa-consulta-conexao.tls.certresolver=letsencrypt
+
+      - "traefik.http.routers.mk-octa-consulta-notificacao-ativa.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/consulta-notificacao-ativa`)"
+      - traefik.http.routers.mk-octa-consulta-notificacao-ativa.entrypoints=websecure
+      - traefik.http.routers.mk-octa-consulta-notificacao-ativa.tls=true
+      - traefik.http.routers.mk-octa-consulta-notificacao-ativa.tls.certresolver=letsencrypt
+
+      - "traefik.http.routers.mk-octa-consulta-notifica-cliente.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/consulta-notifica-cliente`)"
+      - traefik.http.routers.mk-octa-consulta-notifica-cliente.entrypoints=websecure
+      - traefik.http.routers.mk-octa-consulta-notifica-cliente.tls=true
+      - traefik.http.routers.mk-octa-consulta-notifica-cliente.tls.certresolver=letsencrypt
+
+      - "traefik.http.routers.mk-octa-gera-boleto.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/gera-boleto`)"
+      - traefik.http.routers.mk-octa-gera-boleto.entrypoints=websecure
+      - traefik.http.routers.mk-octa-gera-boleto.tls=true
+      - traefik.http.routers.mk-octa-gera-boleto.tls.certresolver=letsencrypt
+
+      - "traefik.http.routers.mk-octa-gera-pix.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/gera-pix`)"
+      - traefik.http.routers.mk-octa-gera-pix.entrypoints=websecure
+      - traefik.http.routers.mk-octa-gera-pix.tls=true
+      - traefik.http.routers.mk-octa-gera-pix.tls.certresolver=letsencrypt
+
+      - "traefik.http.routers.mk-octa-autodesbloqueio.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/autodesbloqueio`)"
+      - traefik.http.routers.mk-octa-autodesbloqueio.entrypoints=websecure
+      - traefik.http.routers.mk-octa-autodesbloqueio.tls=true
+      - traefik.http.routers.mk-octa-autodesbloqueio.tls.certresolver=letsencrypt
+
+      - traefik.http.services.mk-octa-api.loadbalancer.server.port=8080
+
+networks:
+  proxy:
+    external: true
+    name: proxy
