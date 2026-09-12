@@ -123,6 +123,13 @@ curl http://127.0.0.1:8080/metrics
 Traefik já está configurado em `compose.yaml` para `api.newlifefibra.com.br`,
 um router por rota pública, todos na rede externa `proxy`.
 
+## Monitoramento
+
+Prometheus + Grafana rodam como stack separada — ver `monitoring/README.md`.
+Dashboard já provisionado com requisições/erros/latência por rota, incluindo
+total de requisições por rota no período (pra ver quais rotas os clientes
+mais usam).
+
 ## Validação pós-deploy
 
 Para cada rota, seguindo a seção 13 do guia:

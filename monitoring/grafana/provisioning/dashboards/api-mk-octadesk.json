@@ -1,0 +1,148 @@
+{
+  "id": null,
+  "uid": "api-mk-octadesk",
+  "title": "API MK Octadesk",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["mk-octadesk"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requisições por rota (req/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(mk_octadesk_http_requests_total[5m])) by (route)",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Erros HTTP 5xx por rota (req/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(mk_octadesk_http_requests_total{status=~\"5..\"}[5m])) by (route)",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Latência p95 por rota (s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mk_octadesk_http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Requisições em andamento",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "mk_octadesk_http_in_flight_requests",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "API up",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"api-mk-octadesk\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Erros do MK por código (req/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(mk_octadesk_mk_errors_total[5m])) by (route, codigo)",
+          "legendFormat": "{{route}} / {{codigo}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Total de requisições (janela visível)",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(increase(mk_octadesk_http_requests_total[1h]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Total de requisições por rota (período selecionado)",
+      "type": "bargauge",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(mk_octadesk_http_requests_total{route=~\"/v1/.*\"}[$__range])) by (route)",
+          "legendFormat": "{{route}}",
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}
