@@ -143,6 +143,50 @@
           "instant": true
         }
       ]
+    },
+    {
+      "id": 9,
+      "title": "Requisições — $route",
+      "type": "timeseries",
+      "repeat": "route",
+      "repeatDirection": "h",
+      "maxPerRow": 2,
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "fillOpacity": 15 },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(mk_octadesk_http_requests_total{route=\"$route\"}[5m])) by (status)",
+          "legendFormat": "status {{status}}",
+          "refId": "A"
+        }
+      ]
     }
-  ]
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "route",
+        "label": "Rota",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheusds" },
+        "query": {
+          "qryType": 1,
+          "query": "label_values(mk_octadesk_http_requests_total{route=~\"/v1/.*\"}, route)",
+          "refId": "route-variable"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" },
+        "sort": 1
+      }
+    ]
+  }
 }
