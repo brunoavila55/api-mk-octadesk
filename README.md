@@ -58,6 +58,35 @@ e o IP já liberado no MK. Todas as 7 rotas responderam com dados reais:
   `sanitizeRequestError` em `internal/mk/client.go`, que preserva a
   classificação de timeout mas nunca expõe a URL.
 
+Deploy em produção (`api.newlifefibra.com.br`) validado ponta a ponta em
+2026-09-12: DNS, certificado Let's Encrypt, roteamento Traefik e autenticação
+confirmados nas 7 rotas; dados reais do MK confirmados em 6 delas
+(`autodesbloqueio` validado localmente contra o mesmo MK, sem repetir via
+Traefik por ser uma ação).
+
+## Corte no Octadesk
+
+Ao migrar cada flow, trocar:
+- **Autenticação**: query param `?key=...` → header `X-API-Key: ...`.
+- **Envelope de resposta**: campos que antes ficavam na raiz agora ficam
+  dentro de `dados` (ex.: `response.codConexao` → `response.dados[0].codConexao`).
+
+| Flow antigo (Octadesk) | Rota nova | Parâmetro | Mudança no acesso à resposta |
+|---|---|---|---|
+| `consulta-cliente` (por `doc`) | `/v1/consulta-documento` | `doc` → **`documento`** | raiz → `dados.tipo`, `dados.cadastros[]` |
+| `consulta-conexao` | `/v1/consulta-conexao` | `cd_cliente` (igual) | raiz array → `dados[]` |
+| `consulta-notif-parada-ativa` | `/v1/consulta-notificacao-ativa` | nenhum | `response.status` → `dados.status` |
+| `notif-parada` | `/v1/consulta-notifica-cliente` | `cd_conexao` (igual) | `response.status` → `dados.status` |
+| `consulta-boletos-pessoa` (parte boleto) | `/v1/gera-boleto` | `cd_cliente` (igual) | raiz array → `dados[]`; **sem** campo `pixCopiaeCola` |
+| `consulta-boletos-pessoa` (parte pix) | `/v1/gera-pix` | `cd_cliente` (igual) | raiz array → `dados[]`; campo agora se chama **`pixCopiaECola`** (antes `pixCopiaeCola` — atenção à capitalização do "E") |
+| `autodesbloqueio` | `/v1/autodesbloqueio` | `cd_conexao` (igual) | raiz → `dados.status`, `dados.mensagem` |
+
+Ordem sugerida (mais simples → mais arriscada): `consulta-conexao` →
+`consulta-documento` → `consulta-notificacao-ativa` → `consulta-notifica-cliente`
+→ `gera-boleto`/`gera-pix` → `autodesbloqueio` por último. Para cada uma:
+atualizar o flow → testar no Octadesk com um contato de teste → só então
+desativar/remover a chamada à rota Svelte antiga correspondente.
+
 ## ⚠️ Itens pendentes de confirmação no MK
 
 - **Erros de "não encontrado"**: as rotas que dependiam de `status !== "OK"`
