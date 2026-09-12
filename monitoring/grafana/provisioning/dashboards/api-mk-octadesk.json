@@ -204,6 +204,57 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 12,
+      "title": "Classificação LLM — destino (período selecionado)",
+      "type": "piechart",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 108 },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "displayLabels": ["percent"]
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(mk_octadesk_llm_classificacao_total[$__range])) by (destino)",
+          "legendFormat": "{{destino}}",
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Classificação LLM — erros por código (req/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 108 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(mk_octadesk_llm_erros_total[5m])) by (codigo)",
+          "legendFormat": "{{codigo}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Classificação LLM — latência p95 (s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 116 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mk_octadesk_http_request_duration_seconds_bucket{route=\"/v1/llm-classifica-mensagem\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "templating": {

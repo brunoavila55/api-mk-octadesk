@@ -20,6 +20,9 @@ type Config struct {
 	MKWebserviceCounterPassword string
 	MKHTTPTimeout               time.Duration
 	MKTemporaryAuthTokenTTL     time.Duration
+	OllamaBaseURL               *url.URL
+	OllamaModel                 string
+	LLMHTTPTimeout              time.Duration
 }
 
 func Load() (Config, error) {
@@ -60,6 +63,18 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	config.MKTemporaryAuthTokenTTL, err = durationOrDefault("MK_TEMPORARY_AUTH_TOKEN_TTL", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+
+	ollamaBaseURL, err := url.Parse(valueOrDefault("OLLAMA_BASE_URL", "http://ollama:11434"))
+	if err != nil || ollamaBaseURL.Scheme == "" || ollamaBaseURL.Host == "" {
+		return Config{}, errors.New("OLLAMA_BASE_URL deve ser uma URL absoluta válida")
+	}
+	config.OllamaBaseURL = ollamaBaseURL
+	config.OllamaModel = valueOrDefault("OLLAMA_MODEL", "atendimento-classificador")
+
+	config.LLMHTTPTimeout, err = durationOrDefault("LLM_HTTP_TIMEOUT", 60*time.Second)
 	if err != nil {
 		return Config{}, err
 	}

@@ -12,10 +12,34 @@ import (
 	"time"
 
 	"api-mk-octadesk/internal/config"
+	"api-mk-octadesk/internal/llm"
 	"api-mk-octadesk/internal/mk"
 )
 
 const testAPIKey = "chave-de-teste-com-24-caracteres"
+
+// newTestOllamaClient monta um *llm.Client apontando para um servidor Ollama
+// de teste. Usado pelos testes que não exercitam a rota de classificação,
+// mas ainda precisam montar o handler completo.
+func newTestOllamaClient(t *testing.T, ollamaMux *http.ServeMux) *llm.Client {
+	t.Helper()
+	if ollamaMux == nil {
+		ollamaMux = http.NewServeMux()
+	}
+	ollamaServer := httptest.NewServer(ollamaMux)
+	t.Cleanup(ollamaServer.Close)
+
+	baseURL, err := url.Parse(ollamaServer.URL)
+	if err != nil {
+		t.Fatalf("erro ao montar URL do servidor Ollama de teste: %v", err)
+	}
+
+	return llm.NewClient(config.Config{
+		OllamaBaseURL:  baseURL,
+		OllamaModel:    "atendimento-classificador",
+		LLMHTTPTimeout: 2 * time.Second,
+	})
+}
 
 func newTestHandler(t *testing.T, mkMux *http.ServeMux) (http.Handler, *bytes.Buffer) {
 	t.Helper()
@@ -36,10 +60,11 @@ func newTestHandler(t *testing.T, mkMux *http.ServeMux) (http.Handler, *bytes.Bu
 	}
 
 	client := mk.NewClient(cfg)
+	llmClient := newTestOllamaClient(t, nil)
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
-	return NewHandler(client, testAPIKey, logger), logBuffer
+	return NewHandler(client, llmClient, testAPIKey, logger), logBuffer
 }
 
 func writeJSONFixture(writer http.ResponseWriter, value any) {
@@ -191,8 +216,9 @@ func TestConsultaConexao_MKTimeout(t *testing.T) {
 		MKTemporaryAuthTokenTTL: 5 * time.Minute,
 	}
 	client := mk.NewClient(cfg)
+	llmClient := newTestOllamaClient(t, nil)
 	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
-	handler := NewHandler(client, testAPIKey, logger)
+	handler := NewHandler(client, llmClient, testAPIKey, logger)
 
 	request := httptest.NewRequest(http.MethodGet, "/v1/consulta-conexao?cd_cliente=42", nil)
 	request.Header.Set("X-API-Key", testAPIKey)
@@ -245,6 +271,142 @@ func TestAutoDesbloqueio_RegistraMetricaPorDesfecho(t *testing.T) {
 	expected := `mk_octadesk_autodesbloqueio_resultado_total{resultado="limite_mensal_atingido"} 1`
 	if !strings.Contains(body, expected) {
 		t.Fatalf("esperava métrica %q em /metrics, não encontrada:\n%s", expected, body)
+	}
+}
+
+// newTestHandlerComOllama monta o handler completo com um MK vazio (não usado
+// pelos testes de classificação) e o servidor Ollama de teste fornecido.
+func newTestHandlerComOllama(t *testing.T, ollamaMux *http.ServeMux) (http.Handler, *bytes.Buffer) {
+	t.Helper()
+	mkServer := httptest.NewServer(http.NewServeMux())
+	t.Cleanup(mkServer.Close)
+	baseURL, _ := url.Parse(mkServer.URL)
+
+	client := mk.NewClient(config.Config{
+		MKBaseURL:               baseURL,
+		MKServiceCode:           "9999",
+		MKTemporaryAuthToken:    "token-fixo",
+		MKHTTPTimeout:           2 * time.Second,
+		MKTemporaryAuthTokenTTL: 5 * time.Minute,
+	})
+	llmClient := newTestOllamaClient(t, ollamaMux)
+	logBuffer := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
+
+	return NewHandler(client, llmClient, testAPIKey, logger), logBuffer
+}
+
+func TestClassificaMensagem_SemAPIKey(t *testing.T) {
+	handler, _ := newTestHandlerComOllama(t, nil)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-classifica-mensagem", strings.NewReader(`{"mensagem":"estou sem internet"}`))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("esperava 401, obteve %d", recorder.Code)
+	}
+}
+
+func TestClassificaMensagem_MensagemVazia(t *testing.T) {
+	handler, _ := newTestHandlerComOllama(t, nil)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-classifica-mensagem", strings.NewReader(`{"mensagem":"   "}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("esperava 400, obteve %d", recorder.Code)
+	}
+}
+
+func TestClassificaMensagem_CorpoInvalido(t *testing.T) {
+	handler, _ := newTestHandlerComOllama(t, nil)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-classifica-mensagem", strings.NewReader(`{isso não é json`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("esperava 400, obteve %d", recorder.Code)
+	}
+}
+
+func TestClassificaMensagem_Sucesso(t *testing.T) {
+	ollamaMux := http.NewServeMux()
+	ollamaMux.HandleFunc("/api/generate", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]string{"response": `{"destino_principal":"suporte"}`})
+	})
+
+	handler, logBuffer := newTestHandlerComOllama(t, ollamaMux)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-classifica-mensagem", strings.NewReader(`{"mensagem":"estou sem internet, quando vai voltar?"}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("esperava 200, obteve %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("resposta não é JSON válido: %v", err)
+	}
+	dados, ok := body["dados"].(map[string]any)
+	if !ok || dados["destino"] != "suporte" {
+		t.Fatalf("esperava dados.destino = suporte, obteve %v", body["dados"])
+	}
+
+	if bytes.Contains(logBuffer.Bytes(), []byte("estou sem internet")) {
+		t.Fatal("log não deveria conter o texto da mensagem do cliente")
+	}
+}
+
+func TestClassificaMensagem_OllamaIndisponivel(t *testing.T) {
+	ollamaMux := http.NewServeMux()
+	ollamaMux.HandleFunc("/api/generate", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusInternalServerError)
+	})
+
+	handler, _ := newTestHandlerComOllama(t, ollamaMux)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-classifica-mensagem", strings.NewReader(`{"mensagem":"estou sem internet"}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("esperava 502, obteve %d", recorder.Code)
+	}
+}
+
+func TestClassificaMensagem_RegistraMetricaPorDestino(t *testing.T) {
+	ollamaMux := http.NewServeMux()
+	ollamaMux.HandleFunc("/api/generate", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]string{"response": `{"destino_principal":"financeiro"}`})
+	})
+
+	handler, _ := newTestHandlerComOllama(t, ollamaMux)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-classifica-mensagem", strings.NewReader(`{"mensagem":"quero a segunda via do boleto"}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("esperava 200, obteve %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	metricsRequest := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(metricsRecorder, metricsRequest)
+
+	expected := `mk_octadesk_llm_classificacao_total{destino="financeiro"} 1`
+	if !strings.Contains(metricsRecorder.Body.String(), expected) {
+		t.Fatalf("esperava métrica %q em /metrics, não encontrada:\n%s", expected, metricsRecorder.Body.String())
 	}
 }
 

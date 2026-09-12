@@ -12,6 +12,7 @@ import (
 
 	"api-mk-octadesk/internal/config"
 	"api-mk-octadesk/internal/httpapi"
+	"api-mk-octadesk/internal/llm"
 	"api-mk-octadesk/internal/mk"
 )
 
@@ -25,14 +26,18 @@ func main() {
 	}
 
 	client := mk.NewClient(cfg)
-	handler := httpapi.NewHandler(client, cfg.ChatbotAPIKey, logger)
+	llmClient := llm.NewClient(cfg)
+	handler := httpapi.NewHandler(client, llmClient, cfg.ChatbotAPIKey, logger)
 
+	// WriteTimeout precisa acomodar o LLM_HTTP_TIMEOUT (padrão 60s) da rota
+	// de classificação, além de alguma folga — sem isso o servidor cortaria
+	// a resposta antes do Ollama terminar de responder.
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      cfg.LLMHTTPTimeout + 15*time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 

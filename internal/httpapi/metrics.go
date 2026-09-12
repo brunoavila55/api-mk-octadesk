@@ -20,6 +20,8 @@ type apiMetrics struct {
 	inFlight                 prometheus.Gauge
 	mkErrorsTotal            *prometheus.CounterVec
 	autodesbloqueioResultado *prometheus.CounterVec
+	llmClassificacaoTotal    *prometheus.CounterVec
+	llmErrosTotal            *prometheus.CounterVec
 	handler                  http.Handler
 }
 
@@ -52,6 +54,14 @@ func newAPIMetrics() *apiMetrics {
 			Name: "mk_octadesk_autodesbloqueio_resultado_total",
 			Help: "Total de chamadas de autodesbloqueio, por desfecho de negócio (sucesso, não bloqueada, limite mensal já atingido).",
 		}, []string{"resultado"}),
+		llmClassificacaoTotal: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "mk_octadesk_llm_classificacao_total",
+			Help: "Total de mensagens classificadas pela LLM, por destino (nunca inclui o texto da mensagem).",
+		}, []string{"destino"}),
+		llmErrosTotal: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "mk_octadesk_llm_erros_total",
+			Help: "Total de erros ao classificar mensagens via LLM, por código de erro interno.",
+		}, []string{"codigo"}),
 		handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
 	}
 }
@@ -62,6 +72,14 @@ func (metrics *apiMetrics) recordMKError(route, codigo string) {
 
 func (metrics *apiMetrics) recordAutodesbloqueio(resultado string) {
 	metrics.autodesbloqueioResultado.WithLabelValues(resultado).Inc()
+}
+
+func (metrics *apiMetrics) recordClassificacao(destino string) {
+	metrics.llmClassificacaoTotal.WithLabelValues(destino).Inc()
+}
+
+func (metrics *apiMetrics) recordLLMErro(codigo string) {
+	metrics.llmErrosTotal.WithLabelValues(codigo).Inc()
 }
 
 // instrument mede toda requisição atendida por next. A rota usada como label

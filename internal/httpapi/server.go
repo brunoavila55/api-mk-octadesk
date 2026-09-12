@@ -8,10 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"api-mk-octadesk/internal/llm"
 	"api-mk-octadesk/internal/mk"
 )
 
-func NewHandler(client *mk.Client, apiKey string, logger *slog.Logger) http.Handler {
+func NewHandler(client *mk.Client, llmClient *llm.Client, apiKey string, logger *slog.Logger) http.Handler {
 	metrics := newAPIMetrics()
 	mux := http.NewServeMux()
 
@@ -20,7 +21,7 @@ func NewHandler(client *mk.Client, apiKey string, logger *slog.Logger) http.Hand
 	})
 	mux.Handle("GET /metrics", metrics.handler)
 
-	handlers := &handlers{client: client, logger: logger, metrics: metrics}
+	handlers := &handlers{client: client, llmClient: llmClient, logger: logger, metrics: metrics}
 
 	mux.Handle("GET /v1/consulta-documento", requireAPIKey(apiKey, http.HandlerFunc(handlers.consultaDocumento)))
 	mux.Handle("GET /v1/consulta-conexao", requireAPIKey(apiKey, http.HandlerFunc(handlers.consultaConexao)))
@@ -29,6 +30,7 @@ func NewHandler(client *mk.Client, apiKey string, logger *slog.Logger) http.Hand
 	mux.Handle("GET /v1/gera-boleto", requireAPIKey(apiKey, http.HandlerFunc(handlers.geraBoleto)))
 	mux.Handle("GET /v1/gera-pix", requireAPIKey(apiKey, http.HandlerFunc(handlers.geraPix)))
 	mux.Handle("GET /v1/autodesbloqueio", requireAPIKey(apiKey, http.HandlerFunc(handlers.autoDesbloqueio)))
+	mux.Handle("POST /v1/llm-classifica-mensagem", requireAPIKey(apiKey, http.HandlerFunc(handlers.classificaMensagem)))
 
 	return metrics.instrument(requestLog(mux, logger))
 }

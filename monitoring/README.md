@@ -16,6 +16,9 @@ Provisionado automaticamente (`grafana/provisioning/dashboards/api-mk-octadesk.j
 - Erros do MK por rota e código (`mk_octadesk_mk_errors_total`)
 - Total de requisições por rota no período selecionado — para responder
   "quais rotas os clientes mais usam" (ex.: nem todo mundo pede boleto)
+- Classificação LLM: distribuição por destino (`mk_octadesk_llm_classificacao_total`),
+  erros por código (`mk_octadesk_llm_erros_total`) e latência p95 da rota
+  `/v1/llm-classifica-mensagem`
 
 ## Deploy / atualização
 

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func setBaseEnv(t *testing.T) {
 	t.Helper()
@@ -22,6 +25,12 @@ func TestLoad_ConfiguracaoValida(t *testing.T) {
 	}
 	if cfg.MKServiceCode != "9999" {
 		t.Fatalf("esperava MK_SERVICE_CODE padrão 9999, obteve %s", cfg.MKServiceCode)
+	}
+	if cfg.OllamaModel != "atendimento-classificador" {
+		t.Fatalf("esperava OLLAMA_MODEL padrão atendimento-classificador, obteve %s", cfg.OllamaModel)
+	}
+	if cfg.LLMHTTPTimeout != 60*time.Second {
+		t.Fatalf("esperava LLM_HTTP_TIMEOUT padrão de 60s, obteve %s", cfg.LLMHTTPTimeout)
 	}
 }
 
@@ -88,5 +97,23 @@ func TestLoad_DuracaoInvalida(t *testing.T) {
 
 	if _, err := Load(); err == nil {
 		t.Fatal("esperava erro por MK_HTTP_TIMEOUT inválido")
+	}
+}
+
+func TestLoad_OllamaBaseURLInvalida(t *testing.T) {
+	setBaseEnv(t)
+	t.Setenv("OLLAMA_BASE_URL", "não-é-uma-url")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("esperava erro por OLLAMA_BASE_URL inválida")
+	}
+}
+
+func TestLoad_LLMHTTPTimeoutInvalido(t *testing.T) {
+	setBaseEnv(t)
+	t.Setenv("LLM_HTTP_TIMEOUT", "não-é-uma-duração")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("esperava erro por LLM_HTTP_TIMEOUT inválido")
 	}
 }

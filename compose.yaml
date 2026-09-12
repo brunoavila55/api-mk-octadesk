@@ -1,8 +1,24 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+      - ./ollama:/modelfiles:ro
+    expose:
+      - "11434"
+    networks:
+      - proxy
+    # Sem labels do Traefik de propósito: o Ollama só é chamado internamente
+    # pela api, nunca fica exposto publicamente.
+
   api:
     build: .
     container_name: api-mk-octadesk
     restart: unless-stopped
+    depends_on:
+      - ollama
     env_file:
       - .env
     expose:
@@ -57,3 +73,6 @@ networks:
   proxy:
     external: true
     name: proxy
+
+volumes:
+  ollama-data:

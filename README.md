@@ -25,11 +25,60 @@ ou, em caso de erro:
 | GET | `/v1/gera-boleto` | `cd_cliente` | Segunda via das faturas pendentes relevantes |
 | GET | `/v1/gera-pix` | `cd_cliente` | Código PIX copia-e-cola das faturas pendentes relevantes |
 | GET | `/v1/autodesbloqueio` | `cd_conexao` | Solicita desbloqueio automático (ação — MK limita a 1x/mês) |
+| POST | `/v1/llm-classifica-mensagem` | corpo `{"mensagem": "..."}` | Classifica a mensagem do cliente em um setor (`vendas`, `financeiro`, `suporte` ou `atendimento`) via LLM |
 | GET | `/health` | — | Healthcheck, sem autenticação |
 | GET | `/metrics` | — | Métricas Prometheus, sem autenticação |
 
 As rotas de consulta preenchem o array de `dados` com objetos vazios até um
 mínimo de 3 itens, para compatibilidade com os flows atuais do Octadesk.
+
+## Classificação de mensagens via LLM
+
+`POST /v1/llm-classifica-mensagem` recebe **só a mensagem do cliente** (sem
+histórico, sem pergunta anterior) e devolve o setor de destino:
+
+```json
+// corpo da requisição
+{"mensagem": "estou sem internet desde ontem"}
+```
+```json
+// resposta
+{"status": "ok", "dados": {"destino": "suporte"}}
+```
+
+`dados.destino` é sempre um de `vendas`, `financeiro`, `suporte` ou
+`atendimento` — o flow do Octadesk usa esse valor num if/else para tagear a
+conversa. Esta rota:
+
+- **não chama o MK** (não importa `internal/mk`);
+- **não chama a API do Octadesk de volta** — quem tageia a conversa é o
+  próprio flow, com o valor que esta rota devolve;
+- nunca loga o texto da mensagem do cliente, só o destino classificado
+  (mesmo princípio de privacidade já usado no resto do projeto);
+- em caso de falha, timeout ou resposta não interpretável do modelo, devolve
+  erro (`llm_timeout` / 504, ou `llm_indisponivel`/`llm_resposta_invalida` /
+  502) para o flow do Octadesk cair na fila de humanos.
+
+### Setup do Ollama (modelo `Qwen/Qwen2.5-3B-Instruct`)
+
+O `compose.yaml` já sobe um serviço `ollama` (imagem oficial `ollama/ollama`,
+sem exposição via Traefik — só a `api` fala com ele na rede interna). Depois
+de subir a stack, é preciso baixar o modelo base e criar o modelo
+classificador customizado a partir de `ollama/Modelfile`:
+
+```bash
+docker compose up -d ollama
+docker compose exec ollama ollama pull qwen2.5:3b-instruct
+docker compose exec ollama ollama create atendimento-classificador -f /modelfiles/Modelfile
+```
+
+`OLLAMA_MODEL` (em `.env`) precisa bater com o nome usado no `ollama create`
+acima. Para reaplicar mudanças no Modelfile, rode o `ollama create` de novo —
+ele substitui o modelo existente.
+
+O `ollama/Modelfile` **ainda não é a versão final** — é a base atual do
+prompt/exemplos usados para classificar a mensagem, e deve ser ajustado
+conforme o modelo for testado com conversas reais.
 
 ## Validado contra o MK real de produção (2026-09-12)
 
@@ -144,4 +193,11 @@ curl --get 'https://api.newlifefibra.com.br/v1/consulta-conexao' \
   --header "X-API-Key: $CHATBOT_API_KEY"
 
 # Fluxo completo com dado real autorizado — espera 200
+
+# Classificação LLM — espera 200 com dados.destino em {vendas,financeiro,suporte,atendimento}
+curl -i https://api.newlifefibra.com.br/v1/llm-classifica-mensagem \
+  --request POST \
+  --header "X-API-Key: $CHATBOT_API_KEY" \
+  --header "Content-Type: application/json" \
+  --data '{"mensagem": "estou sem internet desde ontem"}'
 ```
