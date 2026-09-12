@@ -3,18 +3,12 @@ package mk
 import (
 	"context"
 	"net/url"
+	"strings"
 )
 
 // AutoDesbloqueio solicita ao MK o desbloqueio automático de uma conexão
 // bloqueada por falta de pagamento. O próprio MK limita essa ação a uma vez
-// por mês por conexão.
-//
-// ATENÇÃO: a classificação abaixo (Status == "OK") é a melhor suposição a
-// partir do padrão usado nas demais rotas do MK — o código antigo em Svelte
-// nunca validava esta resposta, só repassava o JSON cru. Antes de liberar
-// esta rota em produção, confirme no Insomnia os retornos reais de: sucesso,
-// já desbloqueado este mês, e ainda bloqueado por falta de pagamento; ajuste
-// este parsing e a resposta pública em internal/httpapi/handlers.go de acordo.
+// por mês por conexão. Ver AutoDesbloqueioResult para os shapes confirmados.
 func (client *Client) AutoDesbloqueio(ctx context.Context, cdConexao string) (AutoDesbloqueioResult, error) {
 	token, err := client.tokenProvider.Token(ctx)
 	if err != nil {
@@ -32,4 +26,33 @@ func (client *Client) AutoDesbloqueio(ctx context.Context, cdConexao string) (Au
 	}
 
 	return parsed, nil
+}
+
+// ClassificacaoAutodesbloqueio identifica o desfecho de negócio de uma
+// chamada de autodesbloqueio, para observabilidade — em especial para medir
+// quantos clientes tentam repetir o desbloqueio já no mesmo mês.
+type ClassificacaoAutodesbloqueio string
+
+const (
+	AutodesbloqueioSucesso      ClassificacaoAutodesbloqueio = "sucesso"
+	AutodesbloqueioNaoBloqueada ClassificacaoAutodesbloqueio = "nao_bloqueada"
+	AutodesbloqueioLimiteMensal ClassificacaoAutodesbloqueio = "limite_mensal_atingido"
+	AutodesbloqueioDesconhecida ClassificacaoAutodesbloqueio = "desconhecida"
+)
+
+// Classificar diferencia os dois motivos de recusa do MK pelo texto de
+// Mensagem, já que o Status sozinho não distingue ("ERRO" cobre os dois).
+// Confirmado contra produção em 2026-09-12 — ver comentário em
+// AutoDesbloqueioResult.
+func (result AutoDesbloqueioResult) Classificar() ClassificacaoAutodesbloqueio {
+	switch {
+	case result.Status == "OK":
+		return AutodesbloqueioSucesso
+	case strings.Contains(result.Mensagem, "incompatível"):
+		return AutodesbloqueioNaoBloqueada
+	case strings.Contains(result.Mensagem, "indisponível"):
+		return AutodesbloqueioLimiteMensal
+	default:
+		return AutodesbloqueioDesconhecida
+	}
 }

@@ -15,11 +15,12 @@ import (
 // do MK, para diferenciar timeout/indisponibilidade/registro-não-encontrado
 // sem nunca usar documento, telefone ou nome como label.
 type apiMetrics struct {
-	requestsTotal   *prometheus.CounterVec
-	requestDuration *prometheus.HistogramVec
-	inFlight        prometheus.Gauge
-	mkErrorsTotal   *prometheus.CounterVec
-	handler         http.Handler
+	requestsTotal            *prometheus.CounterVec
+	requestDuration          *prometheus.HistogramVec
+	inFlight                 prometheus.Gauge
+	mkErrorsTotal            *prometheus.CounterVec
+	autodesbloqueioResultado *prometheus.CounterVec
+	handler                  http.Handler
 }
 
 // newAPIMetrics usa um registry Prometheus próprio (em vez do registry global
@@ -47,12 +48,20 @@ func newAPIMetrics() *apiMetrics {
 			Name: "mk_octadesk_mk_errors_total",
 			Help: "Total de erros ao consultar o MK, por rota e código de erro interno.",
 		}, []string{"route", "codigo"}),
+		autodesbloqueioResultado: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "mk_octadesk_autodesbloqueio_resultado_total",
+			Help: "Total de chamadas de autodesbloqueio, por desfecho de negócio (sucesso, não bloqueada, limite mensal já atingido).",
+		}, []string{"resultado"}),
 		handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
 	}
 }
 
 func (metrics *apiMetrics) recordMKError(route, codigo string) {
 	metrics.mkErrorsTotal.WithLabelValues(route, codigo).Inc()
+}
+
+func (metrics *apiMetrics) recordAutodesbloqueio(resultado string) {
+	metrics.autodesbloqueioResultado.WithLabelValues(resultado).Inc()
 }
 
 // instrument mede toda requisição atendida por next. A rota usada como label

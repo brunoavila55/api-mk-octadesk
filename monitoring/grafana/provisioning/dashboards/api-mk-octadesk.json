@@ -167,6 +167,43 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 10,
+      "title": "Autodesbloqueio — desfechos (período selecionado)",
+      "type": "piechart",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 100 },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "displayLabels": ["percent"]
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(mk_octadesk_autodesbloqueio_resultado_total[$__range])) by (resultado)",
+          "legendFormat": "{{resultado}}",
+          "refId": "A",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Autodesbloqueio — repetições no mesmo mês (req/s)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheusds" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 100 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "fixed", "fixedColor": "orange" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(mk_octadesk_autodesbloqueio_resultado_total{resultado=\"limite_mensal_atingido\"}[15m]))",
+          "legendFormat": "clientes tentando repetir",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "templating": {

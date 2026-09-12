@@ -145,7 +145,9 @@ func (h *handlers) autoDesbloqueio(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
-	h.logger.Info("autodesbloqueio solicitado", "cd_conexao", cdConexao, "status", result.Status)
+	classificacao := result.Classificar()
+	h.metrics.recordAutodesbloqueio(string(classificacao))
+	h.logger.Info("autodesbloqueio solicitado", "cd_conexao", cdConexao, "status", result.Status, "classificacao", classificacao)
 	writeJSON(writer, http.StatusOK, result)
 }
 

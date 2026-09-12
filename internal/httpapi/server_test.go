@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -213,6 +214,37 @@ func TestConsultaDocumento_DocumentoInvalido(t *testing.T) {
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("esperava 400, obteve %d", recorder.Code)
+	}
+}
+
+func TestAutoDesbloqueio_RegistraMetricaPorDesfecho(t *testing.T) {
+	mkMux := http.NewServeMux()
+	mkMux.HandleFunc("/mk/WSMKAutoDesbloqueio.rule", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]string{
+			"status":   "ERRO",
+			"mensagem": "Operação indisponível para esta conexão.",
+		})
+	})
+
+	handler, _ := newTestHandler(t, mkMux)
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/autodesbloqueio?cd_conexao=34586", nil)
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("esperava 200, obteve %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	metricsRequest := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(metricsRecorder, metricsRequest)
+
+	body := metricsRecorder.Body.String()
+	expected := `mk_octadesk_autodesbloqueio_resultado_total{resultado="limite_mensal_atingido"} 1`
+	if !strings.Contains(body, expected) {
+		t.Fatalf("esperava métrica %q em /metrics, não encontrada:\n%s", expected, body)
 	}
 }
 
