@@ -1,8 +1,8 @@
 # api-mk-octadesk
 
-API em Go que conecta o chatbot Octadesk ao ERP MK, substituindo as rotas
-antigas em SvelteKit (mantidas em `old_api/` apenas como referência histórica —
-não fazem parte do build). Segue o padrão descrito em `guia_criar_api.md`.
+API em Go que conecta o chatbot Octadesk ao ERP MK, rodando em paralelo às
+rotas antigas em SvelteKit (que continuam no ar em outro fluxo do Octadesk,
+sem mudanças). Segue o padrão descrito em `guia_criar_api.md`.
 
 ## Rotas
 
