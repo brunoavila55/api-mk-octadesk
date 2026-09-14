@@ -69,6 +69,17 @@ func (h *handlers) consultaConexao(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
+	if len(conexoes) > 0 {
+		afetadas, err := h.client.ConexoesAfetadasAtivas(request.Context())
+		if err != nil {
+			h.handleMKError(writer, route, err)
+			return
+		}
+		for i := range conexoes {
+			conexoes[i].Notificado = afetadas[conexoes[i].CodConexao]
+		}
+	}
+
 	writeJSON(writer, http.StatusOK, padPlaceholders(conexoes, minPlaceholderItems))
 }
 

@@ -19,9 +19,9 @@ ou, em caso de erro:
 | Método | Rota | Parâmetro | Descrição |
 |---|---|---|---|
 | GET | `/v1/consulta-documento` | `documento` (CPF/CNPJ) | Busca cadastros e conexões associadas a um documento |
-| GET | `/v1/consulta-conexao` | `cd_cliente` | Lista conexões de um código de cliente MK |
+| GET | `/v1/consulta-conexao` | `cd_cliente` | Lista conexões de um código de cliente MK, cada uma já com `notificado` (se está afetada por parada ativa) |
 | GET | `/v1/consulta-notificacao-ativa` | — | Indica se há alguma notificação de parada ativa |
-| GET | `/v1/consulta-notifica-cliente` | `cd_conexao` | Indica se uma conexão específica está afetada por uma parada ativa |
+| GET | `/v1/consulta-notifica-cliente` | `cd_conexao` | Indica se uma conexão específica está afetada por uma parada ativa (redundante se o flow já chamou `consulta-conexao` antes) |
 | GET | `/v1/gera-boleto` | `cd_cliente` | Segunda via das faturas pendentes relevantes |
 | GET | `/v1/gera-pix` | `cd_cliente` | Código PIX copia-e-cola das faturas pendentes relevantes |
 | GET | `/v1/autodesbloqueio` | `cd_conexao` | Solicita desbloqueio automático (ação — MK limita a 1x/mês) |

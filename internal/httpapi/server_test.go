@@ -133,6 +133,9 @@ func TestConsultaConexao_Sucesso(t *testing.T) {
 			},
 		})
 	})
+	mkMux.HandleFunc("/core-api/notificacoes/status", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, []map[string]string{})
+	})
 
 	handler, logBuffer := newTestHandler(t, mkMux)
 
@@ -156,9 +159,85 @@ func TestConsultaConexao_Sucesso(t *testing.T) {
 	if !ok || len(dados) != 3 {
 		t.Fatalf("esperava 3 itens (1 real + 2 placeholders), obteve %v", body["dados"])
 	}
+	primeira, ok := dados[0].(map[string]any)
+	if !ok || primeira["notificado"] != false {
+		t.Fatalf("esperava notificado=false sem notificação ativa, obteve %v", dados[0])
+	}
 
 	if bytes.Contains(logBuffer.Bytes(), []byte("cd_cliente=42")) {
 		t.Fatal("log não deveria conter a query string com dados do cliente")
+	}
+}
+
+func TestConsultaConexao_ComNotificacaoAtiva(t *testing.T) {
+	mkMux := http.NewServeMux()
+	mkMux.HandleFunc("/mk/WSMKConexoesPorCliente.rule", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]any{
+			"status": "OK",
+			"Conexoes": []map[string]string{
+				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "N"},
+			},
+		})
+	})
+	mkMux.HandleFunc("/core-api/notificacoes/status", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, []map[string]string{{"cod": "55"}})
+	})
+	mkMux.HandleFunc("/core-api/notificacoes/conexoes-afetadas", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, []map[string]string{{"codconexao": "123"}})
+	})
+
+	handler, _ := newTestHandler(t, mkMux)
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/consulta-conexao?cd_cliente=42", nil)
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("esperava 200, obteve %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("resposta não é JSON válido: %v", err)
+	}
+	dados, ok := body["dados"].([]any)
+	if !ok || len(dados) != 3 {
+		t.Fatalf("esperava 3 itens, obteve %v", body["dados"])
+	}
+	primeira, ok := dados[0].(map[string]any)
+	if !ok || primeira["notificado"] != true {
+		t.Fatalf("esperava notificado=true na conexão afetada, obteve %v", dados[0])
+	}
+	segunda, ok := dados[1].(map[string]any)
+	if !ok || segunda["notificado"] != false {
+		t.Fatalf("esperava notificado=false no placeholder, obteve %v", dados[1])
+	}
+}
+
+func TestConsultaConexao_NotificacaoIndisponivel(t *testing.T) {
+	mkMux := http.NewServeMux()
+	mkMux.HandleFunc("/mk/WSMKConexoesPorCliente.rule", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]any{
+			"status": "OK",
+			"Conexoes": []map[string]string{
+				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "N"},
+			},
+		})
+	})
+	mkMux.HandleFunc("/core-api/notificacoes/status", func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusInternalServerError)
+	})
+
+	handler, _ := newTestHandler(t, mkMux)
+
+	request := httptest.NewRequest(http.MethodGet, "/v1/consulta-conexao?cd_cliente=42", nil)
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("esperava 502, obteve %d", recorder.Code)
 	}
 }
 

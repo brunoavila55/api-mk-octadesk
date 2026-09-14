@@ -34,6 +34,7 @@ type ConexaoInfo struct {
 	CodConexao string `json:"codConexao"`
 	Endereco   string `json:"endereco"`
 	Bloqueada  string `json:"bloqueada"`
+	Notificado bool   `json:"notificado"`
 }
 
 // CadastroInfo representa um cadastro (lead ou cliente) encontrado por documento.

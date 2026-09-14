@@ -33,17 +33,24 @@ func (client *Client) NotificacaoAtiva(ctx context.Context) (bool, error) {
 	return len(ativas) > 0, nil
 }
 
-// NotificaCliente indica se a conexão informada está na lista de afetados de
-// alguma notificação de parada ativa.
-func (client *Client) NotificaCliente(ctx context.Context, cdConexao string) (bool, error) {
+// ConexoesAfetadasAtivas retorna o conjunto de códigos de conexão afetados
+// por alguma notificação de parada ativa no momento. Usado para cruzar contra
+// várias conexões de uma vez (ex.: todas as conexões de um cliente) sem
+// repetir a busca de notificações ativas a cada conexão.
+func (client *Client) ConexoesAfetadasAtivas(ctx context.Context) (map[string]bool, error) {
 	ativas, err := client.notificacoesAtivas(ctx)
 	if err != nil {
-		return false, err
+		return nil, err
+	}
+
+	afetadas := make(map[string]bool)
+	if len(ativas) == 0 {
+		return afetadas, nil
 	}
 
 	token, err := client.tokenProvider.Token(ctx)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	for _, notificacao := range ativas {
@@ -51,17 +58,26 @@ func (client *Client) NotificaCliente(ctx context.Context, cdConexao string) (bo
 		query.Set("token", token)
 		query.Set("codigo_parada", string(notificacao.Cod))
 
-		var afetadas []conexaoAfetadaRaw
-		if err := client.get(ctx, "/core-api/notificacoes/conexoes-afetadas", query, &afetadas); err != nil {
-			return false, err
+		var lista []conexaoAfetadaRaw
+		if err := client.get(ctx, "/core-api/notificacoes/conexoes-afetadas", query, &lista); err != nil {
+			return nil, err
 		}
 
-		for _, afetada := range afetadas {
-			if string(afetada.CodConexao) == cdConexao {
-				return true, nil
-			}
+		for _, afetada := range lista {
+			afetadas[string(afetada.CodConexao)] = true
 		}
 	}
 
-	return false, nil
+	return afetadas, nil
+}
+
+// NotificaCliente indica se a conexão informada está na lista de afetados de
+// alguma notificação de parada ativa.
+func (client *Client) NotificaCliente(ctx context.Context, cdConexao string) (bool, error) {
+	afetadas, err := client.ConexoesAfetadasAtivas(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return afetadas[cdConexao], nil
 }
