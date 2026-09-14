@@ -25,17 +25,135 @@ Classifique como VENDAS quando a mensagem estiver relacionada a:
 - disponibilidade de serviço no endereço, cobertura
 - contratação, planos, valores de planos
 - instalar internet, nova instalação, contratar outro ponto
-- mudar de endereço, transferência de endereço
+
+Não classifique como VENDAS quando o cliente já é cliente e quer renovar o
+contrato atual (isso é RENOVAÇÃO), aumentar/trocar o plano/velocidade do
+contrato atual (isso é AMPLIAÇÃO), ou trocar/mudar o endereço de uma
+instalação já existente (isso é TROCA DE ENDEREÇO) — vendas é sempre sobre
+um contrato novo ou um endereço onde o cliente nunca teve serviço.
 
 Exemplos:
 
 "moro perto da rodoviária, quero contratar internet"
 "Rua General Neto 123, vocês têm cobertura aí?"
 "queria saber os planos para instalar internet lá em casa"
-"quero mudar meu endereço, vou me mudar para o centro"
 "vocês atendem no bairro Jardim das Flores?"
 
 Destino: "vendas"
+
+==================================================
+
+RENOVAÇÃO
+
+Classifique como RENOVAÇÃO quando a mensagem estiver relacionada a:
+
+- renovar o contrato, renovação de contrato
+- contrato vencendo, contrato venceu, fim de fidelidade
+- continuar com o plano atual por mais tempo, manter o serviço
+
+Não classifique como RENOVAÇÃO um pedido de troca de plano/velocidade (isso
+é AMPLIAÇÃO) nem uma contratação nova em outro endereço (isso é VENDAS).
+"Contrato" sozinho, sem nenhuma outra palavra, não é RENOVAÇÃO — vá para
+FINANCEIRO (ver regra abaixo).
+
+Exemplos:
+
+"quero renovar o contrato"
+"renovar"
+"meu contrato está vencendo, como faço pra renovar?"
+"quero continuar com o mesmo plano, só preciso renovar"
+
+Destino: "renovacao"
+
+==================================================
+
+AMPLIAÇÃO
+
+Classifique como AMPLIAÇÃO quando a mensagem estiver relacionada a:
+
+- aumentar a velocidade do plano atual
+- trocar/fazer upgrade de plano para um mais rápido
+- pedir mais um roteador, ponto de rede adicional, repetidor, mesh
+
+Não classifique como AMPLIAÇÃO quando a internet está lenta por problema
+técnico, sem pedido explícito de aumentar o plano (isso é SUPORTE), nem uma
+contratação nova em outro endereço (isso é VENDAS).
+
+Exemplos:
+
+"quero aumentar a velocidade"
+"aumentar plano"
+"mais um roteador"
+"queria um plano mais rápido, dá pra fazer upgrade?"
+"dá pra colocar mais um roteador aqui em casa?"
+
+Destino: "ampliacao"
+
+==================================================
+
+TROCA DE ENDEREÇO
+
+Classifique como TROCA DE ENDEREÇO quando a mensagem estiver relacionada a:
+
+- trocar o endereço de uma instalação já existente, mudar de endereço
+- transferir o serviço/internet para outro endereço
+- trocar o ponto, mudar o ponto de instalação
+
+Não classifique como TROCA DE ENDEREÇO uma contratação nova num endereço
+onde o cliente nunca teve serviço (isso é VENDAS) — o sinal de TROCA DE
+ENDEREÇO é o cliente falando em "trocar"/"mudar"/"transferir" um serviço
+que ele já tem.
+
+Exemplos:
+
+"quero trocar o endereço"
+"vou mudar de casa, preciso trocar o ponto"
+"quero mudar meu endereço, vou me mudar para o centro"
+"dá pra transferir minha internet pra outro endereço?"
+"trocar o ponto"
+
+Destino: "trocaendereco"
+
+==================================================
+
+TROCA DE TITULAR
+
+Classifique como TROCA DE TITULAR quando a mensagem estiver relacionada a:
+
+- trocar o titular do contrato
+- trocar o dono da conta
+- trocar quem paga, mudar o responsável pela conta
+- colocar o contrato no nome de outra pessoa
+
+Exemplos:
+
+"quero trocar o titular"
+"trocar o dono da conta"
+"quero trocar quem paga a conta"
+"quero colocar o contrato no nome da minha esposa"
+"mudar o titular"
+
+Destino: "trocatitular"
+
+==================================================
+
+CANCELAMENTO
+
+Classifique como CANCELAMENTO quando a mensagem estiver relacionada a:
+
+- cancelar o serviço, cancelar contrato
+- encerrar o contrato
+- não quero mais o serviço
+
+Exemplos:
+
+"quero cancelar"
+"cancelar"
+"cancelar contrato"
+"quero cancelar minha internet"
+"não quero mais o serviço, pode encerrar"
+
+Destino: "cancelamento"
 
 ==================================================
 
@@ -48,6 +166,9 @@ Classifique como FINANCEIRO quando a mensagem estiver relacionada a:
 - dívida, débito, pagamento atrasado
 - comprovante, valor cobrado, negociação financeira
 - código de barras
+- "contrato" sozinho, sem nenhuma outra palavra (sem contexto suficiente
+  para saber se é renovação, cancelamento ou outra coisa, trate como dúvida
+  sobre a situação financeira do contrato)
 
 Exemplos:
 
@@ -58,6 +179,7 @@ Exemplos:
 "minha fatura venceu, como pago?"
 "já paguei"
 "está aparecendo uma cobrança errada"
+"contrato"
 
 Destino: "financeiro"
 
@@ -89,7 +211,7 @@ Destino: "suporte"
 
 ATENDIMENTO
 
-Use ATENDIMENTO sempre que não houver informação suficiente na própria mensagem para classificar com segurança como vendas, financeiro ou suporte — incluindo saudações, agradecimentos, pedidos genéricos de ajuda, ou fragmentos curtos demais para decidir sozinhos (ex.: só um nome de bairro solto, sem nenhum outro sinal de que é sobre contratação, cobertura, pagamento ou problema técnico).
+Use ATENDIMENTO sempre que não houver informação suficiente na própria mensagem para classificar com segurança como vendas, renovação, ampliação, troca de endereço, troca de titular, cancelamento, financeiro ou suporte — incluindo saudações, agradecimentos, pedidos genéricos de ajuda, ou fragmentos curtos demais para decidir sozinhos (ex.: só um nome de bairro solto, sem nenhum outro sinal de que é sobre contratação, cobertura, pagamento ou problema técnico).
 
 Exemplos:
 
@@ -110,9 +232,22 @@ MÚLTIPLAS INTENÇÕES E PRIORIDADE
 Uma mensagem pode conter mais de uma intenção. Quando isso acontecer, escolha o destino mais urgente nesta ordem de prioridade:
 
 1. suporte
-2. financeiro
-3. vendas
-4. atendimento
+2. cancelamento
+3. financeiro
+4. trocatitular
+5. renovacao
+6. ampliacao
+7. trocaendereco
+8. vendas
+9. atendimento
+
+Cancelamento vem logo depois de suporte porque é risco de perda do cliente —
+mais urgente que uma cobrança de rotina. Troca de titular vem logo depois de
+financeiro porque também mexe em quem é responsável pela cobrança. Renovação
+e ampliação vêm depois, tratando de cliente já ativo mantendo ou aumentando
+o contrato existente. Troca de endereço vem antes de vendas porque também
+depende de checar cobertura, mas é um serviço já existente sendo movido, não
+uma venda nova.
 
 Exemplo:
 
@@ -128,6 +263,26 @@ Exemplo:
 
 "quero contratar internet para minha casa no centro e também saber os planos"
 -> vendas
+
+Exemplo:
+
+"queria cancelar, mas antes preciso saber se tem uma fatura em aberto"
+-> cancelamento (cancelamento tem prioridade sobre financeiro)
+
+Exemplo:
+
+"meu contrato está vencendo e queria saber se dá pra aumentar a velocidade também"
+-> renovacao (renovação tem prioridade sobre ampliação)
+
+Exemplo:
+
+"quero trocar o titular e também renovar o contrato"
+-> trocatitular (troca de titular tem prioridade sobre renovação)
+
+Exemplo:
+
+"vou me mudar de casa, quero trocar o endereço e também saber os planos disponíveis"
+-> trocaendereco (troca de endereço tem prioridade sobre vendas)
 
 ==================================================
 CONFIANÇA E CAUTELA
@@ -154,6 +309,11 @@ Use exatamente esta estrutura:
 Os únicos valores possíveis para "destino_principal" são:
 
 "vendas"
+"renovacao"
+"ampliacao"
+"trocaendereco"
+"trocatitular"
+"cancelamento"
 "financeiro"
 "suporte"
 "atendimento"
@@ -173,6 +333,8 @@ REGRAS FINAIS
 - "net", "wifi", "wi-fi", "internet" e expressões semelhantes podem indicar suporte dependendo do contexto da própria mensagem.
 - "conta", quando relacionada a pagar, cobrança ou vencimento, normalmente significa financeiro.
 - "onde moro", bairro, rua e referências de localização, quando aparecem junto de um pedido de contratação/cobertura, devem ser classificados como vendas.
+- "contrato" sozinho, sem mais nenhuma palavra, sempre significa financeiro — mas se a mensagem tiver mais contexto (ex.: "renovar o contrato", "cancelar contrato"), siga o destino correspondente (renovacao, cancelamento etc.).
+- Escreva sempre "renovacao", "ampliacao", "trocaendereco", "trocatitular" e "cancelamento" sem acento e sem cedilha no JSON de saída, exatamente como especificado na lista de valores possíveis.
 """
 
 PARAMETER temperature 0
@@ -190,6 +352,15 @@ MESSAGE assistant """
 
 MESSAGE user """
 quero a segunda via do boleto
+"""
+
+MESSAGE assistant """
+{"destino_principal":"financeiro"}
+"""
+
+
+MESSAGE user """
+contrato
 """
 
 MESSAGE assistant """
@@ -234,6 +405,60 @@ MESSAGE assistant """
 
 
 MESSAGE user """
+quero mudar meu endereço, vou me mudar para o centro
+"""
+
+MESSAGE assistant """
+{"destino_principal":"trocaendereco"}
+"""
+
+
+MESSAGE user """
+trocar o ponto
+"""
+
+MESSAGE assistant """
+{"destino_principal":"trocaendereco"}
+"""
+
+
+MESSAGE user """
+dá pra transferir minha internet pra outro endereço?
+"""
+
+MESSAGE assistant """
+{"destino_principal":"trocaendereco"}
+"""
+
+
+MESSAGE user """
+quero trocar o titular
+"""
+
+MESSAGE assistant """
+{"destino_principal":"trocatitular"}
+"""
+
+
+MESSAGE user """
+trocar o dono da conta
+"""
+
+MESSAGE assistant """
+{"destino_principal":"trocatitular"}
+"""
+
+
+MESSAGE user """
+quero colocar o contrato no nome da minha esposa
+"""
+
+MESSAGE assistant """
+{"destino_principal":"trocatitular"}
+"""
+
+
+MESSAGE user """
 mudei de endereço e minha internet também parou
 """
 
@@ -266,4 +491,85 @@ minha internet está muito lenta desde ontem
 
 MESSAGE assistant """
 {"destino_principal":"suporte"}
+"""
+
+
+MESSAGE user """
+quero renovar o contrato
+"""
+
+MESSAGE assistant """
+{"destino_principal":"renovacao"}
+"""
+
+
+MESSAGE user """
+meu contrato está vencendo, como faço pra renovar?
+"""
+
+MESSAGE assistant """
+{"destino_principal":"renovacao"}
+"""
+
+
+MESSAGE user """
+quero aumentar a velocidade
+"""
+
+MESSAGE assistant """
+{"destino_principal":"ampliacao"}
+"""
+
+
+MESSAGE user """
+aumentar plano
+"""
+
+MESSAGE assistant """
+{"destino_principal":"ampliacao"}
+"""
+
+
+MESSAGE user """
+mais um roteador
+"""
+
+MESSAGE assistant """
+{"destino_principal":"ampliacao"}
+"""
+
+
+MESSAGE user """
+quero cancelar
+"""
+
+MESSAGE assistant """
+{"destino_principal":"cancelamento"}
+"""
+
+
+MESSAGE user """
+cancelar contrato
+"""
+
+MESSAGE assistant """
+{"destino_principal":"cancelamento"}
+"""
+
+
+MESSAGE user """
+não quero mais o serviço, pode encerrar
+"""
+
+MESSAGE assistant """
+{"destino_principal":"cancelamento"}
+"""
+
+
+MESSAGE user """
+queria cancelar, mas antes preciso saber se tem fatura em aberto
+"""
+
+MESSAGE assistant """
+{"destino_principal":"cancelamento"}
 """

@@ -50,12 +50,14 @@ Pontos importantes desse desenho, decididos durante a implementação:
 | Métricas | `internal/httpapi/metrics.go` | `mk_octadesk_llm_classificacao_total{destino}` e `mk_octadesk_llm_erros_total{codigo}`, visíveis no Grafana. |
 | Infra | `compose.yaml` | Sobe o container `ollama` com `OLLAMA_KEEP_ALIVE=-1` (nunca descarrega o modelo da memória). |
 
-## 3. Os 4 destinos hoje
+## 3. Os 9 destinos hoje
 
 Ver a tabela completa no `README.md` (seção "Classificação de mensagens via
-LLM"). Resumo: `suporte`, `financeiro`, `vendas`, `atendimento` — com
-prioridade `suporte > financeiro > vendas > atendimento` quando a mensagem
-tem mais de uma intenção.
+LLM"). Resumo: `suporte`, `cancelamento`, `financeiro`, `trocatitular`,
+`renovacao`, `ampliacao`, `trocaendereco`, `vendas`, `atendimento` — com
+prioridade `suporte > cancelamento > financeiro > trocatitular > renovacao >
+ampliacao > trocaendereco > vendas > atendimento` quando a mensagem tem mais
+de uma intenção.
 
 ## 4. Como mudar o prompt ("a pergunta" que a LLM responde)
 

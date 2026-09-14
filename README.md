@@ -25,7 +25,7 @@ ou, em caso de erro:
 | GET | `/v1/gera-boleto` | `cd_cliente` | Segunda via das faturas pendentes relevantes |
 | GET | `/v1/gera-pix` | `cd_cliente` | Código PIX copia-e-cola das faturas pendentes relevantes |
 | GET | `/v1/autodesbloqueio` | `cd_conexao` | Solicita desbloqueio automático (ação — MK limita a 1x/mês) |
-| POST | `/v1/llm-classifica-mensagem` | corpo `{"mensagem": "..."}` | Classifica a mensagem do cliente em um setor (`vendas`, `financeiro`, `suporte` ou `atendimento`) via LLM |
+| POST | `/v1/llm-classifica-mensagem` | corpo `{"mensagem": "..."}` | Classifica a mensagem do cliente em um setor (`vendas`, `renovacao`, `ampliacao`, `trocaendereco`, `trocatitular`, `cancelamento`, `financeiro`, `suporte` ou `atendimento`) via LLM |
 | GET | `/health` | — | Healthcheck, sem autenticação |
 | GET | `/metrics` | — | Métricas Prometheus, sem autenticação |
 
@@ -46,19 +46,25 @@ histórico, sem pergunta anterior) e devolve o setor de destino:
 {"status": "ok", "dados": {"destino": "suporte"}}
 ```
 
-`dados.destino` é sempre uma destas 4 strings (usar exatamente esses valores
+`dados.destino` é sempre uma destas 9 strings (usar exatamente esses valores
 no if/else do flow do Octadesk):
 
 | `destino` | Quando a LLM classifica assim | Exemplos de mensagem |
 |---|---|---|
 | `suporte` | Sem internet/serviço, conexão caindo ou lenta, modem/roteador com problema, Wi-Fi não conecta | "estou sem internet", "a net caiu", "modem com luz vermelha" |
-| `financeiro` | Boleto, segunda via, fatura, pagamento, PIX, cobrança, vencimento | "quero a segunda via do boleto", "me manda o pix", "minha fatura venceu" |
-| `vendas` | Endereço/localização/cobertura, contratação, planos, nova instalação, mudança de endereço | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?" |
+| `cancelamento` | Cancelar o serviço, encerrar o contrato, não quer mais o serviço | "quero cancelar", "cancelar contrato", "não quero mais o serviço" |
+| `financeiro` | Boleto, segunda via, fatura, pagamento, PIX, cobrança, vencimento, ou só "contrato" sozinho (sem contexto pra saber se é renovação/cancelamento) | "quero a segunda via do boleto", "me manda o pix", "minha fatura venceu", "contrato" |
+| `trocatitular` | Trocar o titular do contrato, trocar o dono da conta, trocar quem paga | "quero trocar o titular", "trocar o dono da conta", "quero colocar o contrato no nome da minha esposa" |
+| `renovacao` | Renovar contrato existente, contrato vencendo, continuar no mesmo plano | "quero renovar o contrato", "meu contrato está vencendo" |
+| `ampliacao` | Aumentar velocidade/plano do contrato existente, pedir mais um roteador/ponto de rede | "quero aumentar a velocidade", "aumentar plano", "mais um roteador" |
+| `trocaendereco` | Trocar/mudar o endereço de uma instalação já existente, trocar o ponto | "quero trocar o endereço", "vou mudar de casa, preciso trocar o ponto", "trocar o ponto" |
+| `vendas` | Endereço/localização/cobertura, contratação nova (endereço onde o cliente nunca teve serviço), planos, nova instalação | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?" |
 | `atendimento` | Mensagem sem informação suficiente pra decidir com segurança (saudações, agradecimentos, pedido genérico, fragmento ambíguo) — a LLM prefere isso a arriscar um chute | "bom dia", "oi", "tenho uma dúvida", "centro" (sozinho, sem mais contexto) |
 
 Se houver mais de uma intenção na mesma mensagem (ex.: "sem internet e
 preciso do boleto"), a LLM decide sozinha o `destino` mais urgente, nesta
-prioridade: `suporte` > `financeiro` > `vendas` > `atendimento`.
+prioridade: `suporte` > `cancelamento` > `financeiro` > `trocatitular` >
+`renovacao` > `ampliacao` > `trocaendereco` > `vendas` > `atendimento`.
 
 Em caso de erro/timeout na chamada (ver lista de códigos abaixo), a rota não
 devolve nenhum desses 4 valores — devolve `status: "erro"` com HTTP 502/504,
@@ -212,7 +218,7 @@ curl --get 'https://api.newlifefibra.com.br/v1/consulta-conexao' \
 
 # Fluxo completo com dado real autorizado — espera 200
 
-# Classificação LLM — espera 200 com dados.destino em {vendas,financeiro,suporte,atendimento}
+# Classificação LLM — espera 200 com dados.destino em {vendas,renovacao,ampliacao,trocaendereco,trocatitular,cancelamento,financeiro,suporte,atendimento}
 curl -i https://api.newlifefibra.com.br/v1/llm-classifica-mensagem \
   --request POST \
   --header "X-API-Key: $CHATBOT_API_KEY" \

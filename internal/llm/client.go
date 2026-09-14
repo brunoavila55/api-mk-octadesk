@@ -21,10 +21,15 @@ const maxResponseBytes = 1 << 20 // 1 MiB — resposta do Ollama nunca deveria p
 
 // destinosValidos são os únicos setores que o Octadesk sabe rotear.
 var destinosValidos = map[string]bool{
-	"vendas":      true,
-	"financeiro":  true,
-	"suporte":     true,
-	"atendimento": true,
+	"vendas":        true,
+	"renovacao":     true,
+	"ampliacao":     true,
+	"trocaendereco": true,
+	"trocatitular":  true,
+	"cancelamento":  true,
+	"financeiro":    true,
+	"suporte":       true,
+	"atendimento":   true,
 }
 
 // ErrRespostaInvalida indica que o Ollama respondeu, mas o conteúdo não pôde
@@ -63,7 +68,8 @@ type classificacao struct {
 
 // Classifica envia a mensagem do cliente ao modelo classificador (construído
 // a partir do Modelfile em ollama/Modelfile) e devolve o setor de destino:
-// "vendas", "financeiro", "suporte" ou "atendimento".
+// "vendas", "renovacao", "ampliacao", "trocaendereco", "trocatitular",
+// "cancelamento", "financeiro", "suporte" ou "atendimento".
 func (client *Client) Classifica(ctx context.Context, mensagem string) (string, error) {
 	reqBody, err := json.Marshal(generateRequest{
 		Model:  client.model,
