@@ -53,10 +53,10 @@ Pontos importantes desse desenho, decididos durante a implementação:
 ## 3. Os 9 destinos hoje
 
 Ver a tabela completa no `README.md` (seção "Classificação de mensagens via
-LLM"). Resumo: `suporte`, `cancelamento`, `financeiro`, `trocatitular`,
-`renovacao`, `ampliacao`, `trocaendereco`, `vendas`, `atendimento` — com
-prioridade `suporte > cancelamento > financeiro > trocatitular > renovacao >
-ampliacao > trocaendereco > vendas > atendimento` quando a mensagem tem mais
+LLM"). Resumo: `suporte`, `cancelamento`, `financeiro`, `titular`,
+`renovacao`, `ampliacao`, `endereco`, `vendas`, `atendimento` — com
+prioridade `suporte > cancelamento > financeiro > titular > renovacao >
+ampliacao > endereco > vendas > atendimento` quando a mensagem tem mais
 de uma intenção.
 
 ## 4. Como mudar o prompt ("a pergunta" que a LLM responde)
@@ -71,7 +71,8 @@ SYSTEM """
 """
 
 PARAMETER temperature 0
-PARAMETER num_ctx 8192
+PARAMETER num_ctx 4096
+PARAMETER num_predict 30
 
 MESSAGE user """..."""
 MESSAGE assistant """{"destino_principal":"..."}"""
@@ -220,8 +221,8 @@ produção — não existe teste automatizado de qualidade, só validação manu
   Assim quem paga esse custo é você, não um cliente real.
 - **`num_ctx` precisa crescer junto com o prompt.** O `num_ctx 2048`
   original foi calibrado pro prompt com 4 setores (~1700 tokens). Ao
-  adicionar os 5 setores extras (`renovacao`, `ampliacao`, `trocaendereco`,
-  `trocatitular`, `cancelamento`) com suas seções de regras e ~15 exemplos
+  adicionar os 5 setores extras (`renovacao`, `ampliacao`, `endereco`,
+  `titular`, `cancelamento`) com suas seções de regras e ~15 exemplos
   few-shot novos, o Modelfile praticamente triplicou de tamanho e passou a
   estourar a janela de 2048 tokens. Isso não deu erro explícito — deu
   **timeout 504 (`llm_timeout`) constante em produção**, mesmo com o modelo
@@ -238,6 +239,33 @@ produção — não existe teste automatizado de qualidade, só validação manu
   100% CPU (sem GPU). Na prática, o aquecimento depois de subir de 2048 pra
   8192 levou ~3min (contra os 55-90s do prompt antigo, menor). É esperado —
   não é sinal de problema, só reflete o tamanho do prompt atual.
+- **O Modelfile foi enxugado depois do incidente acima.** A versão que
+  estourou o `num_ctx 2048` tinha ~14,2 mil caracteres, com bastante regra
+  repetida (cada setor explicado no bloco de setor, de novo em "confiança e
+  cautela", de novo em "regras finais"). Reescrito num formato mais direto
+  (uma linha por setor, uma lista de regras só, sem separadores decorativos
+  nem instruções negativas redundantes — o `format: "json"` do Ollama já
+  força sintaxe JSON, não precisa pedir "não escreva Markdown" etc.),
+  mantendo os 26 exemplos few-shot, o arquivo caiu pra ~4,8 mil caracteres
+  (-66%). Com esse tamanho, `num_ctx 4096` já dá margem confortável (~2x o
+  uso estimado) — não precisou voltar pro 2048 original nem manter o 8192.
+  Também foi adicionado `PARAMETER num_predict 30`, que limita o máximo de
+  tokens gerados (a saída é sempre um JSON minúsculo, então não há motivo
+  pra deixar sem teto). **Lição**: prompt longo com regra repetida não é só
+  desperdício de contexto, é a causa raiz do incidente de `num_ctx` — vale
+  revisar por redundância antes de simplesmente aumentar `num_ctx` de novo
+  da próxima vez que o prompt crescer.
+- **Nomes de destino podem mudar independente do conteúdo do Modelfile.**
+  Nessa mesma revisão, `trocaendereco` virou `endereco` e `trocatitular`
+  virou `titular` (nomes mais curtos, mesmo significado). Renomear um
+  destino existente exige os mesmos passos de adicionar um novo (seção 5):
+  atualizar `ollama/Modelfile` (todas as menções, incluindo `MESSAGE`),
+  `internal/llm/client.go` (`destinosValidos`), `README.md`, recriar o
+  modelo no Ollama e rebuildar/redeployar a `api`. **E mais um passo que só
+  existe pra rename, não pra destino novo**: o flow do Octadesk que já
+  estava configurado pra ler o valor antigo (`trocaendereco`/`trocatitular`)
+  precisa ser atualizado pro nome novo — sem isso, o if/else do flow não
+  reconhece o valor novo e a conversa cai no branch errado (ou nenhum).
 - **Capacidade real, medida com teste de carga usando dados reais do pior
   dia do mês**: ~3-4s por classificação, 100% serializado (o Ollama usa
   todos os núcleos da CPU disponíveis numa única requisição, não roda duas em
@@ -266,7 +294,7 @@ produção — não existe teste automatizado de qualidade, só validação manu
 | `401 - Chave de acesso ausente ou inválida`, mesmo com a chave certa | `X-API-Key` configurado em **Params** (query string) em vez de **Headers** | Mover a chave pra seção de Headers do Octadesk |
 | Primeira mensagem depois de um deploy/restart demora ~1 min e falha | Ollama processando o prompt do zero (cache vazio) — ver seção 6 | Rodar o "aquecimento" manual antes de liberar o teste real |
 | Resposta chega, mas com `llm_resposta_invalida` | A LLM devolveu um destino fora do `destinosValidos`, ou o novo destino foi adicionado no Modelfile mas esquecido no Go | Conferir `internal/llm/client.go` (seção 5.2) |
-| `504`/`llm_timeout` constante depois de adicionar setor(es) novo(s), mesmo já tendo "aquentado" o modelo | Prompt do Modelfile cresceu além do `num_ctx` configurado — ver seção 6 | Aumentar `PARAMETER num_ctx` (ex.: 2048 → 8192), recriar o modelo (`ollama create`) e aquecer de novo |
+| `504`/`llm_timeout` constante depois de adicionar setor(es) novo(s), mesmo já tendo "aquentado" o modelo | Prompt do Modelfile cresceu além do `num_ctx` configurado — ver seção 6 | Aumentar `PARAMETER num_ctx` pra cobrir o prompt (com folga); se o prompt tiver regra repetida, vale enxugar o texto antes de só aumentar `num_ctx` — recriar o modelo (`ollama create`) e aquecer de novo em qualquer um dos dois casos |
 
 ## 8. Ideias pra depois (não implementadas)
 
