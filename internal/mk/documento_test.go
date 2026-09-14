@@ -32,7 +32,7 @@ func TestConsultaDocumento_CodigoPessoaComoNumero(t *testing.T) {
 		writeJSONFixture(writer, map[string]any{
 			"status": "OK",
 			"Conexoes": []map[string]string{
-				{"codconexao": "999", "endereco": "Rua Teste, 1", "bloqueada": "N"},
+				{"codconexao": "999", "endereco": "Rua Teste, 1", "bloqueada": "Não"},
 			},
 		})
 	})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"strings"
 )
 
 // ErrRegistroNaoEncontrado indica que o MK respondeu, mas não encontrou dados
@@ -36,9 +37,17 @@ func (client *Client) ConexoesPorCliente(ctx context.Context, cdCliente string) 
 		conexoes = append(conexoes, ConexaoInfo{
 			CodConexao: string(raw.CodConexao),
 			Endereco:   raw.Endereco,
-			Bloqueada:  raw.Bloqueada,
+			Bloqueada:  bloqueadaParaBool(raw.Bloqueada),
 		})
 	}
 
 	return conexoes, nil
+}
+
+// bloqueadaParaBool converte o texto que o MK devolve no campo bloqueada
+// para booleano. Confirmado contra o MK real (2026-09-14): o valor é "Sim"
+// ou "Não" (não "S"/"N", como os fixtures de teste antigos assumiam) —
+// qualquer outro valor é tratado como não bloqueada.
+func bloqueadaParaBool(valor string) bool {
+	return strings.EqualFold(strings.TrimSpace(valor), "sim")
 }

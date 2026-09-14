@@ -129,7 +129,7 @@ func TestConsultaConexao_Sucesso(t *testing.T) {
 		writeJSONFixture(writer, map[string]any{
 			"status": "OK",
 			"Conexoes": []map[string]string{
-				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "N"},
+				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "Não"},
 			},
 		})
 	})
@@ -175,7 +175,7 @@ func TestConsultaConexao_ComNotificacaoAtiva(t *testing.T) {
 		writeJSONFixture(writer, map[string]any{
 			"status": "OK",
 			"Conexoes": []map[string]string{
-				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "N"},
+				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "Não"},
 			},
 		})
 	})
@@ -221,7 +221,7 @@ func TestConsultaConexao_NotificacaoIndisponivel(t *testing.T) {
 		writeJSONFixture(writer, map[string]any{
 			"status": "OK",
 			"Conexoes": []map[string]string{
-				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "N"},
+				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "Não"},
 			},
 		})
 	})

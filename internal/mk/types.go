@@ -33,7 +33,7 @@ func (f *flexString) UnmarshalJSON(data []byte) error {
 type ConexaoInfo struct {
 	CodConexao string `json:"codConexao"`
 	Endereco   string `json:"endereco"`
-	Bloqueada  string `json:"bloqueada"`
+	Bloqueada  bool   `json:"bloqueada"`
 	Notificado bool   `json:"notificado"`
 }
 

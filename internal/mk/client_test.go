@@ -56,7 +56,7 @@ func TestConexoesPorCliente_Sucesso(t *testing.T) {
 		writeJSONFixture(writer, map[string]any{
 			"status": "OK",
 			"Conexoes": []map[string]string{
-				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "N"},
+				{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": "Não"},
 			},
 		})
 	})
@@ -67,7 +67,7 @@ func TestConexoesPorCliente_Sucesso(t *testing.T) {
 	if err != nil {
 		t.Fatalf("esperava sucesso, obteve erro: %v", err)
 	}
-	if len(conexoes) != 1 || conexoes[0].CodConexao != "123" {
+	if len(conexoes) != 1 || conexoes[0].CodConexao != "123" || conexoes[0].Bloqueada != false {
 		t.Fatalf("resultado inesperado: %+v", conexoes)
 	}
 
@@ -77,6 +77,48 @@ func TestConexoesPorCliente_Sucesso(t *testing.T) {
 	}
 	if calls := atomic.LoadInt32(&authCalls); calls != 1 {
 		t.Fatalf("esperava 1 chamada de autenticação (token em cache), obteve %d", calls)
+	}
+}
+
+// TestConexoesPorCliente_BloqueadaComoBooleano é um teste de regressão:
+// confirmado contra o MK real (2026-09-14) que o campo bloqueada vem como
+// "Sim"/"Não", não "S"/"N" como os fixtures antigos assumiam. Um valor
+// inesperado deve ser tratado como não bloqueada.
+func TestConexoesPorCliente_BloqueadaComoBooleano(t *testing.T) {
+	casos := []struct {
+		valorMK  string
+		esperado bool
+	}{
+		{"Sim", true},
+		{"sim", true},
+		{"  Sim  ", true},
+		{"Não", false},
+		{"", false},
+		{"valor-desconhecido", false},
+	}
+
+	for _, caso := range casos {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/mk/WSAutenticacao.rule", func(writer http.ResponseWriter, _ *http.Request) {
+			writeJSONFixture(writer, map[string]string{"Token": "token-temporario"})
+		})
+		mux.HandleFunc("/mk/WSMKConexoesPorCliente.rule", func(writer http.ResponseWriter, _ *http.Request) {
+			writeJSONFixture(writer, map[string]any{
+				"status": "OK",
+				"Conexoes": []map[string]string{
+					{"codconexao": "123", "endereco": "Rua A, 1", "bloqueada": caso.valorMK},
+				},
+			})
+		})
+
+		client := newTestClient(t, mux)
+		conexoes, err := client.ConexoesPorCliente(context.Background(), "42")
+		if err != nil {
+			t.Fatalf("bloqueada=%q: esperava sucesso, obteve erro: %v", caso.valorMK, err)
+		}
+		if len(conexoes) != 1 || conexoes[0].Bloqueada != caso.esperado {
+			t.Fatalf("bloqueada=%q: esperava Bloqueada=%v, obteve %+v", caso.valorMK, caso.esperado, conexoes)
+		}
 	}
 }
 
