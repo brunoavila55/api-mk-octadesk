@@ -71,7 +71,7 @@ SYSTEM """
 """
 
 PARAMETER temperature 0
-PARAMETER num_ctx 2048
+PARAMETER num_ctx 8192
 
 MESSAGE user """..."""
 MESSAGE assistant """{"destino_principal":"..."}"""
@@ -81,16 +81,20 @@ Passo a passo pra alterar:
 
 1. Edite o `ollama/Modelfile` (ajuste as regras da `SYSTEM`, adicione ou troque
    exemplos `MESSAGE user`/`MESSAGE assistant`).
-2. Recrie o modelo customizado no Ollama (isso sobrescreve a versão anterior):
+2. Se a `SYSTEM` + os exemplos `MESSAGE` cresceram bastante (novo setor,
+   muitos exemplos novos), confira se `PARAMETER num_ctx` ainda cobre o
+   prompt inteiro — ver aviso na seção 6 antes de seguir, senão a próxima
+   chamada pode dar timeout mesmo com o modelo "aquecido".
+3. Recrie o modelo customizado no Ollama (isso sobrescreve a versão anterior):
    ```bash
    docker compose exec ollama ollama create atendimento-classificador -f /modelfiles/Modelfile
    ```
-3. Teste direto no Ollama antes de liberar pro Octadesk, pra não gastar o
+4. Teste direto no Ollama antes de liberar pro Octadesk, pra não gastar o
    "aquecimento" (ver seção 6) com um teste que pode falhar:
    ```bash
    docker compose exec ollama ollama run atendimento-classificador "sua mensagem de teste aqui"
    ```
-4. Se o resultado bater com o esperado, teste pela API real:
+5. Se o resultado bater com o esperado, teste pela API real:
    ```bash
    curl -s -X POST https://api.newlifefibra.com.br/v1/llm-classifica-mensagem \
      -H "X-API-Key: $CHATBOT_API_KEY" -H "Content-Type: application/json" \
@@ -214,6 +218,26 @@ produção — não existe teste automatizado de qualidade, só validação manu
   docker compose exec ollama ollama run atendimento-classificador "teste de aquecimento"
   ```
   Assim quem paga esse custo é você, não um cliente real.
+- **`num_ctx` precisa crescer junto com o prompt.** O `num_ctx 2048`
+  original foi calibrado pro prompt com 4 setores (~1700 tokens). Ao
+  adicionar os 5 setores extras (`renovacao`, `ampliacao`, `trocaendereco`,
+  `trocatitular`, `cancelamento`) com suas seções de regras e ~15 exemplos
+  few-shot novos, o Modelfile praticamente triplicou de tamanho e passou a
+  estourar a janela de 2048 tokens. Isso não deu erro explícito — deu
+  **timeout 504 (`llm_timeout`) constante em produção**, mesmo com o modelo
+  já "aquecido" e respondendo rápido via `ollama run` direto na CLI, porque
+  o llama.cpp ficava reprocessando/descartando parte do contexto a cada
+  chamada HTTP. A correção foi subir `num_ctx` pra 8192 (o host tem RAM de
+  sobra pra isso — confira com `free -h` antes de decidir o valor) e recriar
+  o modelo. **Sempre que adicionar setor(es) novo(s) ou vários exemplos de
+  uma vez, confira se o prompt ainda cabe no `num_ctx` antes de dar como
+  pronto** — não existe aviso automático, só o sintoma de timeout depois do
+  deploy.
+- **Depois de mudar `num_ctx`, o aquecimento a frio demora mais.** Contexto
+  maior = mais tokens de prompt pra processar no prefill, que nesse host é
+  100% CPU (sem GPU). Na prática, o aquecimento depois de subir de 2048 pra
+  8192 levou ~3min (contra os 55-90s do prompt antigo, menor). É esperado —
+  não é sinal de problema, só reflete o tamanho do prompt atual.
 - **Capacidade real, medida com teste de carga usando dados reais do pior
   dia do mês**: ~3-4s por classificação, 100% serializado (o Ollama usa
   todos os núcleos da CPU numa única requisição, não roda duas em
@@ -234,6 +258,7 @@ produção — não existe teste automatizado de qualidade, só validação manu
 | `401 - Chave de acesso ausente ou inválida`, mesmo com a chave certa | `X-API-Key` configurado em **Params** (query string) em vez de **Headers** | Mover a chave pra seção de Headers do Octadesk |
 | Primeira mensagem depois de um deploy/restart demora ~1 min e falha | Ollama processando o prompt do zero (cache vazio) — ver seção 6 | Rodar o "aquecimento" manual antes de liberar o teste real |
 | Resposta chega, mas com `llm_resposta_invalida` | A LLM devolveu um destino fora do `destinosValidos`, ou o novo destino foi adicionado no Modelfile mas esquecido no Go | Conferir `internal/llm/client.go` (seção 5.2) |
+| `504`/`llm_timeout` constante depois de adicionar setor(es) novo(s), mesmo já tendo "aquentado" o modelo | Prompt do Modelfile cresceu além do `num_ctx` configurado — ver seção 6 | Aumentar `PARAMETER num_ctx` (ex.: 2048 → 8192), recriar o modelo (`ollama create`) e aquecer de novo |
 
 ## 8. Ideias pra depois (não implementadas)
 
