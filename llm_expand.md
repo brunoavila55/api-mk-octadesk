@@ -240,11 +240,19 @@ produção — não existe teste automatizado de qualidade, só validação manu
   não é sinal de problema, só reflete o tamanho do prompt atual.
 - **Capacidade real, medida com teste de carga usando dados reais do pior
   dia do mês**: ~3-4s por classificação, 100% serializado (o Ollama usa
-  todos os núcleos da CPU numa única requisição, não roda duas em
+  todos os núcleos da CPU disponíveis numa única requisição, não roda duas em
   paralelo). No pior minuto do pior dia observado (considerando atendimentos
   distintos, não linhas brutas de log do MK), a latência sobe para 10-15s
   no p90, mas sem nenhum timeout — folga confortável em relação aos 60s de
   timeout configurado.
+- **CPU do Ollama é limitada a 14 dos 16 núcleos da VM** (`deploy.resources.
+  limits.cpus: "14"` no `compose.yaml`), porque a VM roda outras APIs além
+  desta. Sem esse limite, o Ollama consome 100% de todos os núcleos durante
+  uma classificação (medido: ~1600% de CPU com 16 núcleos livres), o que
+  derrubaria a performance das outras APIs no pior minuto. Isso deixa a
+  classificação um pouco mais lenta em teoria (2 núcleos a menos), mas ainda
+  dentro da folga observada nos testes de carga. Se o limite mudar (VM
+  ganhar/perder núcleos, outras APIs saírem), reajuste esse valor.
 - **Monitoramento**: o dashboard "API MK Octadesk" no Grafana tem painéis de
   classificação por destino, erros por código, latência p95 da rota, e
   CPU/memória do host (via `node-exporter`) — útil pra acompanhar se o

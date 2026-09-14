@@ -17,6 +17,14 @@ services:
       - "11434"
     networks:
       - proxy
+    deploy:
+      resources:
+        limits:
+          # A VM roda outras APIs além desta — limita o Ollama a 14 dos 16
+          # núcleos pra sempre sobrar CPU pra elas, mesmo no pior minuto de
+          # classificação (Ollama usa todos os núcleos disponíveis numa
+          # única requisição, sem esse limite tomaria a VM inteira).
+          cpus: "14"
     # Sem labels do Traefik de propósito: o Ollama só é chamado internamente
     # pela api, nunca fica exposto publicamente.
 
