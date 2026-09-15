@@ -75,8 +75,8 @@ no if/else do flow do Octadesk):
 | `renovacao` | Renovar contrato existente, contrato vencendo, continuar no mesmo plano | "quero renovar o contrato", "meu contrato está vencendo" |
 | `ampliacao` | Aumentar velocidade/plano do contrato existente, pedir mais um roteador/ponto de rede | "quero aumentar a velocidade", "aumentar plano", "mais um roteador" |
 | `endereco` | Trocar/mudar o endereço de uma instalação já existente, trocar o ponto | "quero trocar o endereço", "vou mudar de casa, preciso trocar o ponto", "trocar o ponto" |
-| `vendas` | Endereço/localização/cobertura, contratação nova (endereço onde o cliente nunca teve serviço), planos, nova instalação | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?" |
-| `atendimento` | Mensagem sem informação suficiente pra decidir com segurança (saudações, agradecimentos, pedido genérico, fragmento ambíguo) — a LLM prefere isso a arriscar um chute | "bom dia", "oi", "tenho uma dúvida", "centro" (sozinho, sem mais contexto) |
+| `vendas` | Endereço/localização/cobertura, contratação nova (endereço onde o cliente nunca teve serviço), planos, nova instalação; **inclui um endereço/bairro sozinho, sem mais contexto** — é a resposta típica à pergunta "qual o seu endereço?" feita a quem está pedindo cobertura/instalação nova | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?", "centro", "vila block sao sepe" |
+| `atendimento` | Mensagem sem informação suficiente pra decidir com segurança (saudações, agradecimentos, pedido genérico, fragmento ambíguo) — a LLM prefere isso a arriscar um chute | "bom dia", "oi", "tenho uma dúvida" |
 
 Se houver mais de uma intenção na mesma mensagem (ex.: "sem internet e
 preciso do boleto"), a LLM decide sozinha o `destino` mais urgente, nesta

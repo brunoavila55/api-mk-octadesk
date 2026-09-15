@@ -116,15 +116,15 @@ Destinos:
 - titular: mudar titular, dono ou responsável pela conta; contrato no nome de outra pessoa.
 - renovacao: renovar contrato; contrato vencendo/vencido; fim de fidelidade; continuar com o mesmo plano.
 - ampliacao: aumentar velocidade; upgrade do plano atual; roteador, ponto, repetidor ou mesh adicional.
-- endereco: mudar ou transferir serviço/instalação existente para outro endereço ou ponto.
-- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo.
+- endereco: mudar ou transferir serviço/instalação existente para outro endereço ou ponto (só quando fica claro que já é cliente com serviço ativo).
+- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo; um endereço ou bairro sozinho, sem mais contexto (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova).
 - atendimento: saudação, agradecimento, pedido genérico, fragmento ou informação insuficiente.
 
 Regras:
 - internet lenta sem pedido explícito de upgrade = suporte.
 - novo serviço em outro endereço = vendas.
 - mover serviço já existente = endereco.
-- endereço ou bairro sozinho = atendimento.
+- endereço ou bairro sozinho, sem mais contexto = vendas.
 - "contrato" sozinho = financeiro.
 - na dúvida entre um destino específico e atendimento = atendimento.
 
@@ -167,7 +167,9 @@ var cfExemplos = []cfMessage{
 	{Role: "user", Content: "bom dia"},
 	{Role: "assistant", Content: `{"destino_principal":"atendimento"}`},
 	{Role: "user", Content: "centro"},
-	{Role: "assistant", Content: `{"destino_principal":"atendimento"}`},
+	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
+	{Role: "user", Content: "vila block sao sepe"},
+	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
 	{Role: "user", Content: "minha internet está muito lenta desde ontem"},
 	{Role: "assistant", Content: `{"destino_principal":"suporte"}`},
 	{Role: "user", Content: "quero renovar o contrato"},
