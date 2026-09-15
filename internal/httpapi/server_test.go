@@ -539,7 +539,7 @@ func TestClassificaMensagemCloudflare_Sucesso(t *testing.T) {
 	cfMux.HandleFunc(cfRunPath, func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSONFixture(writer, map[string]any{
 			"success": true,
-			"result":  map[string]string{"response": `{"destino_principal":"suporte"}`},
+			"result":  map[string]any{"response": map[string]string{"destino_principal": "suporte"}},
 		})
 	})
 
@@ -612,7 +612,7 @@ func TestClassificaMensagemCloudflare_RegistraMetricaPorBackendEDestino(t *testi
 	cfMux.HandleFunc(cfRunPath, func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSONFixture(writer, map[string]any{
 			"success": true,
-			"result":  map[string]string{"response": `{"destino_principal":"financeiro"}`},
+			"result":  map[string]any{"response": map[string]string{"destino_principal": "financeiro"}},
 		})
 	})
 

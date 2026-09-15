@@ -68,7 +68,12 @@ type cfError struct {
 type cfRunResponse struct {
 	Success bool `json:"success"`
 	Result  struct {
-		Response string `json:"response"`
+		// Response vem como objeto JSON direto (não como string contendo
+		// JSON) quando response_format é json_schema — confirmado testando
+		// contra a API real, diferente do que a documentação (inconclusiva
+		// nesse ponto) sugeria. json.RawMessage deixa o Unmarshal final
+		// (em Classifica) decodificar direto pra classificacao.
+		Response json.RawMessage `json:"response"`
 	} `json:"result"`
 	Errors []cfError `json:"errors"`
 }
@@ -254,7 +259,7 @@ func (client *CloudflareClient) Classifica(ctx context.Context, mensagem string)
 	}
 
 	var result classificacao
-	if err := json.Unmarshal([]byte(strings.TrimSpace(parsed.Result.Response)), &result); err != nil {
+	if err := json.Unmarshal(parsed.Result.Response, &result); err != nil {
 		return "", fmt.Errorf("%w: %v", ErrRespostaInvalida, err)
 	}
 

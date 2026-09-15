@@ -57,8 +57,8 @@ func TestCloudflareClassifica_Sucesso(t *testing.T) {
 		writeJSONFixture(writer, cfRunResponse{
 			Success: true,
 			Result: struct {
-				Response string `json:"response"`
-			}{Response: `{"destino_principal":"suporte"}`},
+				Response json.RawMessage `json:"response"`
+			}{Response: json.RawMessage(`{"destino_principal":"suporte"}`)},
 		})
 	})
 
@@ -113,8 +113,8 @@ func TestCloudflareClassifica_DestinoDesconhecido(t *testing.T) {
 		writeJSONFixture(writer, cfRunResponse{
 			Success: true,
 			Result: struct {
-				Response string `json:"response"`
-			}{Response: `{"destino_principal":"marketing"}`},
+				Response json.RawMessage `json:"response"`
+			}{Response: json.RawMessage(`{"destino_principal":"marketing"}`)},
 		})
 	})
 
@@ -125,21 +125,25 @@ func TestCloudflareClassifica_DestinoDesconhecido(t *testing.T) {
 	}
 }
 
-func TestCloudflareClassifica_RespostaNaoJSON(t *testing.T) {
+// TestCloudflareClassifica_RespostaFormatoInesperado cobre o caso em que
+// result.response, embora seja JSON válido (o Cloudflare sempre devolve JSON
+// válido em JSON Mode), não é o objeto {"destino_principal": "..."} esperado
+// — ex.: um array, por alguma mudança de comportamento do modelo/API.
+func TestCloudflareClassifica_RespostaFormatoInesperado(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(cfTestRunPath, func(writer http.ResponseWriter, _ *http.Request) {
 		writeJSONFixture(writer, cfRunResponse{
 			Success: true,
 			Result: struct {
-				Response string `json:"response"`
-			}{Response: "desculpe, não posso ajudar com isso"},
+				Response json.RawMessage `json:"response"`
+			}{Response: json.RawMessage(`[]`)},
 		})
 	})
 
 	client := newTestCloudflareClient(t, mux)
 
 	if _, err := client.Classifica(context.Background(), "qualquer coisa"); err == nil {
-		t.Fatal("esperava erro por resposta que não é JSON válido")
+		t.Fatal("esperava erro por formato de resposta inesperado")
 	}
 }
 
