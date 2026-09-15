@@ -1,10 +1,11 @@
 # Tutorial: entendendo e expandindo a classificação por LLM
 
 Este documento explica como funciona a classificação de mensagens via LLM
-(`POST /v1/llm-classifica-mensagem`), como ajustar o comportamento dela e
+(`POST /v1/llm-classifica-mensagem`, Ollama, e `POST /v1/llm-cf-classifica-mensagem`,
+Cloudflare Workers AI — ver seção 9), como ajustar o comportamento dela e
 como aumentar o número de setores de destino. É complementar ao `README.md`
-(que documenta o contrato da rota) e ao `guia_criar_api.md` (que documenta o
-padrão geral de APIs deste projeto).
+(que documenta o contrato das rotas) e ao `guia_criar_api.md` (que documenta
+o padrão geral de APIs deste projeto).
 
 ## 1. Visão geral: como a peça se encaixa
 
@@ -44,11 +45,13 @@ Pontos importantes desse desenho, decididos durante a implementação:
 
 | Peça | Arquivo | O que faz |
 |---|---|---|
-| Prompt/exemplos da LLM | `ollama/Modelfile` | Define as regras de classificação, os setores e os exemplos few-shot. É o que "ensina" o modelo a classificar. |
+| Prompt/exemplos da LLM (Ollama) | `ollama/Modelfile` | Define as regras de classificação, os setores e os exemplos few-shot. É o que "ensina" o modelo a classificar. |
 | Cliente HTTP do Ollama | `internal/llm/client.go` | Monta a requisição pro Ollama (`/api/generate`), decodifica a resposta e valida se o `destino_principal` é um dos valores conhecidos (`destinosValidos`). |
-| Handler HTTP | `internal/httpapi/handlers.go` (`classificaMensagem`) | Recebe o corpo JSON do Octadesk, valida a mensagem, chama o cliente LLM, formata a resposta pública. |
-| Métricas | `internal/httpapi/metrics.go` | `mk_octadesk_llm_classificacao_total{destino}` e `mk_octadesk_llm_erros_total{codigo}`, visíveis no Grafana. |
-| Infra | `compose.yaml` | Sobe o container `ollama` com `OLLAMA_KEEP_ALIVE=-1` (nunca descarrega o modelo da memória). |
+| Prompt/exemplos da LLM (Cloudflare) | `internal/llm/cloudflare_client.go` (`cfSystemPrompt`, `cfExemplos`) | Mesma política de classificação do Modelfile, só que como mensagens de chat em vez de sintaxe Modelfile — ver seção 9. |
+| Cliente HTTP da Cloudflare | `internal/llm/cloudflare_client.go` | Monta a requisição pro Workers AI (`/accounts/{id}/ai/run/{model}`, com JSON Mode/schema), decodifica e valida do mesmo jeito que o cliente do Ollama (reaproveita `destinosValidos`). |
+| Handlers HTTP | `internal/httpapi/handlers.go` (`classificaMensagem`, `classificaMensagemCloudflare`) | Recebem o corpo JSON do Octadesk, validam a mensagem, chamam o cliente LLM correspondente, formatam a resposta pública. Compartilham a validação via `classificaMensagemVia`. |
+| Métricas | `internal/httpapi/metrics.go` | `mk_octadesk_llm_classificacao_total{backend,destino}` e `mk_octadesk_llm_erros_total{backend,codigo}` — `backend` é `"ollama"` ou `"cloudflare"`, visíveis no Grafana. |
+| Infra | `compose.yaml` | Sobe o container `ollama` com `OLLAMA_KEEP_ALIVE=-1` (nunca descarrega o modelo da memória). A Cloudflare não tem serviço próprio — é só uma API HTTP externa chamada pela `api`. |
 
 ## 3. Os 9 destinos hoje
 
@@ -174,6 +177,16 @@ Sem essa mudança, mesmo que a LLM classifique corretamente como
 `"cancelamento"`, a API vai rejeitar como `llm_resposta_invalida` (502) por
 não reconhecer o valor — essa validação existe de propósito, pra nunca
 repassar ao Octadesk um destino que ele não sabe tratar.
+
+`destinosValidos` é compartilhado pelos dois clientes (Ollama e Cloudflare),
+então essa parte só precisa ser editada uma vez. **Mas** o novo destino
+também precisa ser adicionado em três lugares que não são compartilhados:
+o `ollama/Modelfile` (regras + exemplos), `cfSystemPrompt`/`cfExemplos` em
+`internal/llm/cloudflare_client.go` (mesma coisa, formato de mensagem de
+chat) e `destinosValidosOrdenados` no mesmo arquivo (usado no `enum` do JSON
+Schema que restringe a resposta da Cloudflare). Esquecer um dos dois prompts
+faz um dos backends ficar defasado do outro sem erro nenhum — só classificação
+divergente entre as duas rotas.
 
 ### 5.3 Rebuild e deploy
 
@@ -305,3 +318,51 @@ produção — não existe teste automatizado de qualidade, só validação manu
 - **Ajuste fino do Modelfile com base em erros reais**: o Modelfile atual é
   a primeira versão validada, não a versão final — vale revisar
   periodicamente com mensagens reais que o modelo classificou errado.
+
+## 9. Migração para Cloudflare Workers AI (rota paralela, em validação)
+
+O Ollama roda 100% em CPU nesta VM e o modelo de 3B às vezes classifica
+errado; o objetivo aqui é trocar por um modelo maior/melhor rodando na
+Cloudflare, sem repetir dois problemas de uma tentativa anterior:
+
+1. **Uma primeira tentativa (branch `llm-cloudflare-workers-ai`, já
+   deletada) trocou o Ollama direto pela Cloudflare e foi abandonada**: a
+   classificação mandou clientes pro setor errado algumas vezes, e —
+   separadamente — o Ollama sobrecarregou a VM (Proxmox) por causa dos até
+   14 núcleos que ele reserva pra si (`compose.yaml`), o que não tem relação
+   com a chamada à Cloudflare em si. Essa tentativa também usava um modelo
+   "reasoning" (`qwen3-30b-a3b-fp8`, sem suporte a JSON Mode nativo da
+   Cloudflare), dependendo de extrair `{...}` na marra do texto de resposta
+   pra lidar com um possível vazamento de raciocínio (`<think>...</think>`)
+   antes do JSON.
+2. Desta vez: **rota nova em paralelo** (`/v1/llm-cf-classifica-mensagem`),
+   sem mexer na rota do Ollama, pra dar pra comparar os dois antes de trocar
+   o flow do Octadesk de vez — ver o plano de corte no `README.md`.
+   Modelo trocado pra `@cf/meta/llama-3.1-8b-instruct-fp8-fast`: não é
+   "reasoning" (sem risco de vazar `<think>`) e tem suporte nativo a JSON
+   Mode da Cloudflare (`response_format: json_schema`), então a resposta é
+   restringida por schema em vez de depender só do prompt + parsing
+   defensivo.
+
+**Orçamento de Neurons**: a Cloudflare cobra em "Neurons", com free tier de
+10.000/dia (reseta 00:00 UTC; ao estourar, bloqueia em vez de cobrar — só
+cobra excedente no plano pago). Com ~250 classificações/dia e o modelo
+escolhido, a estimativa fica bem abaixo do limite — não é o fator limitante
+aqui. Se algum dia isso mudar (volume muito maior, ou troca pra um modelo
+mais caro), vale reduzir o tamanho do prompt (mesma lição da seção 6: prompt
+grande = mais tokens = mais Neurons) antes de simplesmente aceitar o
+bloqueio ou migrar pro plano pago.
+
+**Timeout**: `CLOUDFLARE_HTTP_TIMEOUT` (padrão 45s, ver `.env.example`) é
+mais folgado que os 30s que a tentativa anterior usou sem validar em
+produção — mas também não precisa ser tão alto quanto os 60s do Ollama,
+porque a Cloudflare mantém os modelos do catálogo oficial sempre residentes
+("sempre quentes", sem o custo de aquecimento a frio descrito na seção 6
+pro Ollama). Ajustar com base na latência real observada (Grafana) depois
+de um tempo em produção.
+
+**Quando desligar o Ollama**: depois que a rota `-cf-` estiver validada e o
+flow do Octadesk já estiver usando ela, pare o serviço `ollama` no
+`compose.yaml` (ou remova o serviço e os arquivos relacionados, se não
+houver interesse em mantê-lo como plano B). Enquanto isso não acontece, as
+duas rotas ficam ativas e o Ollama continua consumindo CPU normalmente.

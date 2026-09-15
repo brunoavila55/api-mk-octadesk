@@ -41,6 +41,30 @@ func newTestOllamaClient(t *testing.T, ollamaMux *http.ServeMux) *llm.Client {
 	})
 }
 
+// newTestCloudflareClient monta um *llm.CloudflareClient apontando para um
+// servidor Cloudflare Workers AI de teste (fake).
+func newTestCloudflareClient(t *testing.T, cfMux *http.ServeMux) *llm.CloudflareClient {
+	t.Helper()
+	if cfMux == nil {
+		cfMux = http.NewServeMux()
+	}
+	cfServer := httptest.NewServer(cfMux)
+	t.Cleanup(cfServer.Close)
+
+	baseURL, err := url.Parse(cfServer.URL + "/")
+	if err != nil {
+		t.Fatalf("erro ao montar URL do servidor Cloudflare de teste: %v", err)
+	}
+
+	return llm.NewCloudflareClient(config.Config{
+		CloudflareAIBaseURL:   baseURL,
+		CloudflareAccountID:   "conta-teste",
+		CloudflareAPIToken:    "token-teste",
+		CloudflareAIModel:     "@cf/meta/llama-3.1-8b-instruct-fp8-fast",
+		CloudflareHTTPTimeout: 2 * time.Second,
+	})
+}
+
 func newTestHandler(t *testing.T, mkMux *http.ServeMux) (http.Handler, *bytes.Buffer) {
 	t.Helper()
 	mkServer := httptest.NewServer(mkMux)
@@ -61,10 +85,11 @@ func newTestHandler(t *testing.T, mkMux *http.ServeMux) (http.Handler, *bytes.Bu
 
 	client := mk.NewClient(cfg)
 	llmClient := newTestOllamaClient(t, nil)
+	cloudflareClient := newTestCloudflareClient(t, nil)
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
-	return NewHandler(client, llmClient, testAPIKey, logger), logBuffer
+	return NewHandler(client, llmClient, cloudflareClient, testAPIKey, logger), logBuffer
 }
 
 func writeJSONFixture(writer http.ResponseWriter, value any) {
@@ -296,8 +321,9 @@ func TestConsultaConexao_MKTimeout(t *testing.T) {
 	}
 	client := mk.NewClient(cfg)
 	llmClient := newTestOllamaClient(t, nil)
+	cloudflareClient := newTestCloudflareClient(t, nil)
 	logger := slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil))
-	handler := NewHandler(client, llmClient, testAPIKey, logger)
+	handler := NewHandler(client, llmClient, cloudflareClient, testAPIKey, logger)
 
 	request := httptest.NewRequest(http.MethodGet, "/v1/consulta-conexao?cd_cliente=42", nil)
 	request.Header.Set("X-API-Key", testAPIKey)
@@ -353,9 +379,11 @@ func TestAutoDesbloqueio_RegistraMetricaPorDesfecho(t *testing.T) {
 	}
 }
 
-// newTestHandlerComOllama monta o handler completo com um MK vazio (não usado
-// pelos testes de classificação) e o servidor Ollama de teste fornecido.
-func newTestHandlerComOllama(t *testing.T, ollamaMux *http.ServeMux) (http.Handler, *bytes.Buffer) {
+// newTestHandlerComLLM monta o handler completo com um MK vazio (não usado
+// pelos testes de classificação) e os servidores Ollama/Cloudflare de teste
+// fornecidos (qualquer um dos dois pode ser nil, para o backend que o teste
+// em questão não exercita).
+func newTestHandlerComLLM(t *testing.T, ollamaMux, cfMux *http.ServeMux) (http.Handler, *bytes.Buffer) {
 	t.Helper()
 	mkServer := httptest.NewServer(http.NewServeMux())
 	t.Cleanup(mkServer.Close)
@@ -369,10 +397,25 @@ func newTestHandlerComOllama(t *testing.T, ollamaMux *http.ServeMux) (http.Handl
 		MKTemporaryAuthTokenTTL: 5 * time.Minute,
 	})
 	llmClient := newTestOllamaClient(t, ollamaMux)
+	cloudflareClient := newTestCloudflareClient(t, cfMux)
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
-	return NewHandler(client, llmClient, testAPIKey, logger), logBuffer
+	return NewHandler(client, llmClient, cloudflareClient, testAPIKey, logger), logBuffer
+}
+
+// newTestHandlerComOllama monta o handler completo usando o servidor Ollama
+// de teste fornecido; o backend Cloudflare fica com um servidor vazio.
+func newTestHandlerComOllama(t *testing.T, ollamaMux *http.ServeMux) (http.Handler, *bytes.Buffer) {
+	t.Helper()
+	return newTestHandlerComLLM(t, ollamaMux, nil)
+}
+
+// newTestHandlerComCloudflare monta o handler completo usando o servidor
+// Cloudflare de teste fornecido; o backend Ollama fica com um servidor vazio.
+func newTestHandlerComCloudflare(t *testing.T, cfMux *http.ServeMux) (http.Handler, *bytes.Buffer) {
+	t.Helper()
+	return newTestHandlerComLLM(t, nil, cfMux)
 }
 
 func TestClassificaMensagem_SemAPIKey(t *testing.T) {
@@ -483,9 +526,126 @@ func TestClassificaMensagem_RegistraMetricaPorDestino(t *testing.T) {
 	metricsRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(metricsRecorder, metricsRequest)
 
-	expected := `mk_octadesk_llm_classificacao_total{destino="financeiro"} 1`
+	expected := `mk_octadesk_llm_classificacao_total{backend="ollama",destino="financeiro"} 1`
 	if !strings.Contains(metricsRecorder.Body.String(), expected) {
 		t.Fatalf("esperava métrica %q em /metrics, não encontrada:\n%s", expected, metricsRecorder.Body.String())
+	}
+}
+
+const cfRunPath = "/accounts/conta-teste/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast"
+
+func TestClassificaMensagemCloudflare_Sucesso(t *testing.T) {
+	cfMux := http.NewServeMux()
+	cfMux.HandleFunc(cfRunPath, func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]any{
+			"success": true,
+			"result":  map[string]string{"response": `{"destino_principal":"suporte"}`},
+		})
+	})
+
+	handler, logBuffer := newTestHandlerComCloudflare(t, cfMux)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-cf-classifica-mensagem", strings.NewReader(`{"mensagem":"estou sem internet, quando vai voltar?"}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("esperava 200, obteve %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("resposta não é JSON válido: %v", err)
+	}
+	dados, ok := body["dados"].(map[string]any)
+	if !ok || dados["destino"] != "suporte" {
+		t.Fatalf("esperava dados.destino = suporte, obteve %v", body["dados"])
+	}
+
+	if bytes.Contains(logBuffer.Bytes(), []byte("estou sem internet")) {
+		t.Fatal("log não deveria conter o texto da mensagem do cliente")
+	}
+}
+
+func TestClassificaMensagemCloudflare_FalhaReportada(t *testing.T) {
+	cfMux := http.NewServeMux()
+	cfMux.HandleFunc(cfRunPath, func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]any{
+			"success": false,
+			"errors":  []map[string]any{{"code": 7003, "message": "credenciais inválidas"}},
+		})
+	})
+
+	handler, _ := newTestHandlerComCloudflare(t, cfMux)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-cf-classifica-mensagem", strings.NewReader(`{"mensagem":"estou sem internet"}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("esperava 502, obteve %d", recorder.Code)
+	}
+}
+
+func TestClassificaMensagemCloudflare_Indisponivel(t *testing.T) {
+	cfMux := http.NewServeMux()
+	cfMux.HandleFunc(cfRunPath, func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusInternalServerError)
+	})
+
+	handler, _ := newTestHandlerComCloudflare(t, cfMux)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-cf-classifica-mensagem", strings.NewReader(`{"mensagem":"estou sem internet"}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadGateway {
+		t.Fatalf("esperava 502, obteve %d", recorder.Code)
+	}
+}
+
+func TestClassificaMensagemCloudflare_RegistraMetricaPorBackendEDestino(t *testing.T) {
+	cfMux := http.NewServeMux()
+	cfMux.HandleFunc(cfRunPath, func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSONFixture(writer, map[string]any{
+			"success": true,
+			"result":  map[string]string{"response": `{"destino_principal":"financeiro"}`},
+		})
+	})
+
+	handler, _ := newTestHandlerComCloudflare(t, cfMux)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-cf-classifica-mensagem", strings.NewReader(`{"mensagem":"quero a segunda via do boleto"}`))
+	request.Header.Set("X-API-Key", testAPIKey)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("esperava 200, obteve %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	metricsRequest := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(metricsRecorder, metricsRequest)
+
+	expected := `mk_octadesk_llm_classificacao_total{backend="cloudflare",destino="financeiro"} 1`
+	if !strings.Contains(metricsRecorder.Body.String(), expected) {
+		t.Fatalf("esperava métrica %q em /metrics, não encontrada:\n%s", expected, metricsRecorder.Body.String())
+	}
+}
+
+func TestClassificaMensagemCloudflare_SemAPIKey(t *testing.T) {
+	handler, _ := newTestHandlerComCloudflare(t, nil)
+
+	request := httptest.NewRequest(http.MethodPost, "/v1/llm-cf-classifica-mensagem", strings.NewReader(`{"mensagem":"estou sem internet"}`))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("esperava 401, obteve %d", recorder.Code)
 	}
 }
 

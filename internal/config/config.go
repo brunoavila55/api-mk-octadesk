@@ -23,6 +23,11 @@ type Config struct {
 	OllamaBaseURL               *url.URL
 	OllamaModel                 string
 	LLMHTTPTimeout              time.Duration
+	CloudflareAccountID         string
+	CloudflareAPIToken          string
+	CloudflareAIBaseURL         *url.URL
+	CloudflareAIModel           string
+	CloudflareHTTPTimeout       time.Duration
 }
 
 func Load() (Config, error) {
@@ -75,6 +80,31 @@ func Load() (Config, error) {
 	config.OllamaModel = valueOrDefault("OLLAMA_MODEL", "atendimento-classificador")
 
 	config.LLMHTTPTimeout, err = durationOrDefault("LLM_HTTP_TIMEOUT", 60*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+
+	// CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN são opcionais aqui de
+	// propósito: a rota /v1/llm-cf-classifica-mensagem convive com a rota do
+	// Ollama enquanto é validada, e não pode derrubar o processo inteiro (e
+	// com ele a rota do Ollama e todas as outras) só porque a Cloudflare
+	// ainda não foi configurada. Sem essas duas variáveis, o CloudflareClient
+	// recusa a chamada com um erro específico — ver cloudflare_client.go.
+	config.CloudflareAccountID = strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID"))
+	config.CloudflareAPIToken = strings.TrimSpace(os.Getenv("CLOUDFLARE_API_TOKEN"))
+
+	cloudflareAIBaseURL, err := url.Parse(valueOrDefault("CLOUDFLARE_AI_BASE_URL", "https://api.cloudflare.com/client/v4/"))
+	if err != nil || cloudflareAIBaseURL.Scheme == "" || cloudflareAIBaseURL.Host == "" {
+		return Config{}, errors.New("CLOUDFLARE_AI_BASE_URL deve ser uma URL absoluta válida")
+	}
+	config.CloudflareAIBaseURL = cloudflareAIBaseURL
+	config.CloudflareAIModel = valueOrDefault("CLOUDFLARE_AI_MODEL", "@cf/meta/llama-3.1-8b-instruct-fp8-fast")
+
+	// 45s: mais folgado que os 30s da primeira tentativa (nunca validados em
+	// produção), mas sem o problema de aquecimento a frio que justificava os
+	// 60s do Ollama — a Cloudflare mantém os modelos do catálogo sempre
+	// residentes, então a latência aqui é só rede + inferência.
+	config.CloudflareHTTPTimeout, err = durationOrDefault("CLOUDFLARE_HTTP_TIMEOUT", 45*time.Second)
 	if err != nil {
 		return Config{}, err
 	}

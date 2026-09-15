@@ -56,12 +56,12 @@ func newAPIMetrics() *apiMetrics {
 		}, []string{"resultado"}),
 		llmClassificacaoTotal: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "mk_octadesk_llm_classificacao_total",
-			Help: "Total de mensagens classificadas pela LLM, por destino (nunca inclui o texto da mensagem).",
-		}, []string{"destino"}),
+			Help: "Total de mensagens classificadas pela LLM, por backend (ollama, cloudflare) e destino (nunca inclui o texto da mensagem).",
+		}, []string{"backend", "destino"}),
 		llmErrosTotal: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "mk_octadesk_llm_erros_total",
-			Help: "Total de erros ao classificar mensagens via LLM, por código de erro interno.",
-		}, []string{"codigo"}),
+			Help: "Total de erros ao classificar mensagens via LLM, por backend (ollama, cloudflare) e código de erro interno.",
+		}, []string{"backend", "codigo"}),
 		handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
 	}
 }
@@ -74,12 +74,12 @@ func (metrics *apiMetrics) recordAutodesbloqueio(resultado string) {
 	metrics.autodesbloqueioResultado.WithLabelValues(resultado).Inc()
 }
 
-func (metrics *apiMetrics) recordClassificacao(destino string) {
-	metrics.llmClassificacaoTotal.WithLabelValues(destino).Inc()
+func (metrics *apiMetrics) recordClassificacao(backend, destino string) {
+	metrics.llmClassificacaoTotal.WithLabelValues(backend, destino).Inc()
 }
 
-func (metrics *apiMetrics) recordLLMErro(codigo string) {
-	metrics.llmErrosTotal.WithLabelValues(codigo).Inc()
+func (metrics *apiMetrics) recordLLMErro(backend, codigo string) {
+	metrics.llmErrosTotal.WithLabelValues(backend, codigo).Inc()
 }
 
 // instrument mede toda requisição atendida por next. A rota usada como label

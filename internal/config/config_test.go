@@ -11,6 +11,8 @@ func setBaseEnv(t *testing.T) {
 	t.Setenv("MK_BASE_URL", "https://sac.newlifefibra.com.br")
 	t.Setenv("MK_USER_ACCESS_TOKEN", "token")
 	t.Setenv("MK_WEBSERVICE_COUNTER_PASSWORD", "senha")
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "conta-teste")
+	t.Setenv("CLOUDFLARE_API_TOKEN", "token-teste")
 }
 
 func TestLoad_ConfiguracaoValida(t *testing.T) {
@@ -31,6 +33,15 @@ func TestLoad_ConfiguracaoValida(t *testing.T) {
 	}
 	if cfg.LLMHTTPTimeout != 60*time.Second {
 		t.Fatalf("esperava LLM_HTTP_TIMEOUT padrão de 60s, obteve %s", cfg.LLMHTTPTimeout)
+	}
+	if cfg.CloudflareAIModel != "@cf/meta/llama-3.1-8b-instruct-fp8-fast" {
+		t.Fatalf("esperava CLOUDFLARE_AI_MODEL padrão @cf/meta/llama-3.1-8b-instruct-fp8-fast, obteve %s", cfg.CloudflareAIModel)
+	}
+	if cfg.CloudflareAIBaseURL.String() != "https://api.cloudflare.com/client/v4/" {
+		t.Fatalf("esperava CLOUDFLARE_AI_BASE_URL padrão https://api.cloudflare.com/client/v4/, obteve %s", cfg.CloudflareAIBaseURL)
+	}
+	if cfg.CloudflareHTTPTimeout != 45*time.Second {
+		t.Fatalf("esperava CLOUDFLARE_HTTP_TIMEOUT padrão de 45s, obteve %s", cfg.CloudflareHTTPTimeout)
 	}
 }
 
@@ -115,5 +126,41 @@ func TestLoad_LLMHTTPTimeoutInvalido(t *testing.T) {
 
 	if _, err := Load(); err == nil {
 		t.Fatal("esperava erro por LLM_HTTP_TIMEOUT inválido")
+	}
+}
+
+// Sem CLOUDFLARE_ACCOUNT_ID/CLOUDFLARE_API_TOKEN, Load() precisa continuar
+// funcionando (não pode derrubar a API inteira, Ollama incluído, só porque a
+// Cloudflare ainda não foi configurada) — só a rota nova fica indisponível,
+// com um erro específico (llm.ErrNaoConfigurado) tratado em tempo de uso.
+func TestLoad_SemCredenciaisCloudflareContinuaFuncionando(t *testing.T) {
+	setBaseEnv(t)
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "")
+	t.Setenv("CLOUDFLARE_API_TOKEN", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("esperava sucesso mesmo sem credenciais da Cloudflare, obteve erro: %v", err)
+	}
+	if cfg.CloudflareAccountID != "" || cfg.CloudflareAPIToken != "" {
+		t.Fatalf("esperava CloudflareAccountID/CloudflareAPIToken vazios, obteve %q/%q", cfg.CloudflareAccountID, cfg.CloudflareAPIToken)
+	}
+}
+
+func TestLoad_CloudflareAIBaseURLInvalida(t *testing.T) {
+	setBaseEnv(t)
+	t.Setenv("CLOUDFLARE_AI_BASE_URL", "não-é-uma-url")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("esperava erro por CLOUDFLARE_AI_BASE_URL inválida")
+	}
+}
+
+func TestLoad_CloudflareHTTPTimeoutInvalido(t *testing.T) {
+	setBaseEnv(t)
+	t.Setenv("CLOUDFLARE_HTTP_TIMEOUT", "não-é-uma-duração")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("esperava erro por CLOUDFLARE_HTTP_TIMEOUT inválido")
 	}
 }

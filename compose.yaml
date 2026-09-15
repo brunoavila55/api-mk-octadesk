@@ -87,6 +87,13 @@ services:
       - traefik.http.routers.mk-octa-llm-classifica-mensagem.tls=true
       - traefik.http.routers.mk-octa-llm-classifica-mensagem.tls.certresolver=letsencrypt
 
+      # Rota nova (Cloudflare Workers AI), em paralelo à de cima (Ollama)
+      # enquanto a classificação é validada em produção — ver README.md.
+      - "traefik.http.routers.mk-octa-llm-cf-classifica-mensagem.rule=Host(`api.newlifefibra.com.br`) && Path(`/v1/llm-cf-classifica-mensagem`)"
+      - traefik.http.routers.mk-octa-llm-cf-classifica-mensagem.entrypoints=websecure
+      - traefik.http.routers.mk-octa-llm-cf-classifica-mensagem.tls=true
+      - traefik.http.routers.mk-octa-llm-cf-classifica-mensagem.tls.certresolver=letsencrypt
+
       - traefik.http.services.mk-octa-api.loadbalancer.server.port=8080
 
 networks:

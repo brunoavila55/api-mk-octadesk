@@ -29,10 +29,11 @@ const maxMensagemBodyBytes = 8 * 1024
 const maxMensagemRunes = 2000
 
 type handlers struct {
-	client    *mk.Client
-	llmClient *llm.Client
-	logger    *slog.Logger
-	metrics   *apiMetrics
+	client           *mk.Client
+	llmClient        *llm.Client
+	cloudflareClient *llm.CloudflareClient
+	logger           *slog.Logger
+	metrics          *apiMetrics
 }
 
 func (h *handlers) consultaDocumento(writer http.ResponseWriter, request *http.Request) {
@@ -186,8 +187,20 @@ type classificaMensagemRequest struct {
 // devolve o setor de destino, que o próprio flow do Octadesk usa num
 // if/else para tagear a conversa. Esta rota nunca chama o MK.
 func (h *handlers) classificaMensagem(writer http.ResponseWriter, request *http.Request) {
-	const route = "/v1/llm-classifica-mensagem"
+	h.classificaMensagemVia(writer, request, "/v1/llm-classifica-mensagem", "ollama", h.llmClient.Classifica)
+}
 
+// classificaMensagemCloudflare é o equivalente a classificaMensagem usando o
+// Cloudflare Workers AI em vez do Ollama. Mantida como rota própria
+// (/v1/llm-cf-classifica-mensagem) enquanto a classificação é validada em
+// produção antes do corte definitivo — ver README.md.
+func (h *handlers) classificaMensagemCloudflare(writer http.ResponseWriter, request *http.Request) {
+	h.classificaMensagemVia(writer, request, "/v1/llm-cf-classifica-mensagem", "cloudflare", h.cloudflareClient.Classifica)
+}
+
+// classificaMensagemVia concentra a validação de corpo/mensagem comum às
+// duas rotas de classificação; só o backend (Ollama ou Cloudflare) muda.
+func (h *handlers) classificaMensagemVia(writer http.ResponseWriter, request *http.Request, route, backend string, classifica func(context.Context, string) (string, error)) {
 	var body classificaMensagemRequest
 	decoder := json.NewDecoder(io.LimitReader(request.Body, maxMensagemBodyBytes))
 	if err := decoder.Decode(&body); err != nil {
@@ -201,33 +214,33 @@ func (h *handlers) classificaMensagem(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	destino, err := h.llmClient.Classifica(request.Context(), mensagem)
+	destino, err := classifica(request.Context(), mensagem)
 	if err != nil {
-		h.handleLLMError(writer, route, err)
+		h.handleLLMError(writer, route, backend, err)
 		return
 	}
 
-	h.metrics.recordClassificacao(destino)
-	h.logger.Info("mensagem classificada", "destino", destino)
+	h.metrics.recordClassificacao(backend, destino)
+	h.logger.Info("mensagem classificada", "backend", backend, "destino", destino)
 	writeJSON(writer, http.StatusOK, map[string]string{"destino": destino})
 }
 
-// handleLLMError traduz erros do cliente do Ollama para a resposta HTTP
-// pública. Nunca loga a mensagem do cliente, só o erro técnico e o destino
-// (quando houver).
-func (h *handlers) handleLLMError(writer http.ResponseWriter, route string, err error) {
-	h.logger.Error("falha ao classificar mensagem via LLM", "route", route, "error", err)
+// handleLLMError traduz erros dos clientes de LLM (Ollama ou Cloudflare)
+// para a resposta HTTP pública. Nunca loga a mensagem do cliente, só o erro
+// técnico e o destino (quando houver).
+func (h *handlers) handleLLMError(writer http.ResponseWriter, route, backend string, err error) {
+	h.logger.Error("falha ao classificar mensagem via LLM", "route", route, "backend", backend, "error", err)
 
 	var networkErr net.Error
 	switch {
 	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &networkErr) && networkErr.Timeout()):
-		h.metrics.recordLLMErro("llm_timeout")
+		h.metrics.recordLLMErro(backend, "llm_timeout")
 		writeError(writer, http.StatusGatewayTimeout, "llm_timeout", "A classificação demorou demais para responder.")
 	case errors.Is(err, llm.ErrRespostaInvalida):
-		h.metrics.recordLLMErro("llm_resposta_invalida")
+		h.metrics.recordLLMErro(backend, "llm_resposta_invalida")
 		writeError(writer, http.StatusBadGateway, "llm_resposta_invalida", "A classificação não pôde ser interpretada.")
 	default:
-		h.metrics.recordLLMErro("llm_indisponivel")
+		h.metrics.recordLLMErro(backend, "llm_indisponivel")
 		writeError(writer, http.StatusBadGateway, "llm_indisponivel", "Não foi possível classificar a mensagem.")
 	}
 }
