@@ -15,6 +15,11 @@ import (
 
 const cfTestRunPath = "/accounts/conta-teste/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast"
 
+func writeJSONFixture(writer http.ResponseWriter, value any) {
+	writer.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(writer).Encode(value)
+}
+
 func newTestCloudflareClient(t *testing.T, mux *http.ServeMux) *CloudflareClient {
 	t.Helper()
 	server := httptest.NewServer(mux)

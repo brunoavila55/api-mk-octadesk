@@ -12,7 +12,7 @@ import (
 	"api-mk-octadesk/internal/mk"
 )
 
-func NewHandler(client *mk.Client, llmClient *llm.Client, cloudflareClient *llm.CloudflareClient, apiKey string, logger *slog.Logger) http.Handler {
+func NewHandler(client *mk.Client, cloudflareClient *llm.CloudflareClient, apiKey string, logger *slog.Logger) http.Handler {
 	metrics := newAPIMetrics()
 	mux := http.NewServeMux()
 
@@ -21,7 +21,7 @@ func NewHandler(client *mk.Client, llmClient *llm.Client, cloudflareClient *llm.
 	})
 	mux.Handle("GET /metrics", metrics.handler)
 
-	handlers := &handlers{client: client, llmClient: llmClient, cloudflareClient: cloudflareClient, logger: logger, metrics: metrics}
+	handlers := &handlers{client: client, cloudflareClient: cloudflareClient, logger: logger, metrics: metrics}
 
 	mux.Handle("GET /v1/consulta-documento", requireAPIKey(apiKey, http.HandlerFunc(handlers.consultaDocumento)))
 	mux.Handle("GET /v1/consulta-conexao", requireAPIKey(apiKey, http.HandlerFunc(handlers.consultaConexao)))
@@ -30,7 +30,6 @@ func NewHandler(client *mk.Client, llmClient *llm.Client, cloudflareClient *llm.
 	mux.Handle("GET /v1/gera-boleto", requireAPIKey(apiKey, http.HandlerFunc(handlers.geraBoleto)))
 	mux.Handle("GET /v1/gera-pix", requireAPIKey(apiKey, http.HandlerFunc(handlers.geraPix)))
 	mux.Handle("GET /v1/autodesbloqueio", requireAPIKey(apiKey, http.HandlerFunc(handlers.autoDesbloqueio)))
-	mux.Handle("POST /v1/llm-classifica-mensagem", requireAPIKey(apiKey, http.HandlerFunc(handlers.classificaMensagem)))
 	mux.Handle("POST /v1/llm-cf-classifica-mensagem", requireAPIKey(apiKey, http.HandlerFunc(handlers.classificaMensagemCloudflare)))
 
 	return metrics.instrument(requestLog(mux, logger))

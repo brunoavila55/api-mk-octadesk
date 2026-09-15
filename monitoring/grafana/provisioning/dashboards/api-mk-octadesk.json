@@ -250,7 +250,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 116 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(mk_octadesk_http_request_duration_seconds_bucket{route=\"/v1/llm-classifica-mensagem\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(mk_octadesk_http_request_duration_seconds_bucket{route=\"/v1/llm-cf-classifica-mensagem\"}[5m])) by (le))",
           "legendFormat": "p95",
           "refId": "A"
         }

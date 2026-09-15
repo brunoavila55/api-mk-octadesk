@@ -25,8 +25,7 @@ ou, em caso de erro:
 | GET | `/v1/gera-boleto` | `cd_cliente` | Segunda via das faturas pendentes relevantes |
 | GET | `/v1/gera-pix` | `cd_cliente` | Código PIX copia-e-cola das faturas pendentes relevantes |
 | GET | `/v1/autodesbloqueio` | `cd_conexao` | Solicita desbloqueio automático (ação — MK limita a 1x/mês) |
-| POST | `/v1/llm-classifica-mensagem` | corpo `{"mensagem": "..."}` | Classifica a mensagem do cliente em um setor (`vendas`, `renovacao`, `ampliacao`, `endereco`, `titular`, `cancelamento`, `financeiro`, `suporte` ou `atendimento`) via LLM (Ollama) |
-| POST | `/v1/llm-cf-classifica-mensagem` | corpo `{"mensagem": "..."}` | Igual à rota acima, mas via Cloudflare Workers AI — rota nova, em validação, ver seção "Classificação de mensagens via LLM" |
+| POST | `/v1/llm-cf-classifica-mensagem` | corpo `{"mensagem": "..."}` | Classifica a mensagem do cliente em um setor (`vendas`, `renovacao`, `ampliacao`, `endereco`, `titular`, `cancelamento`, `financeiro`, `suporte` ou `atendimento`) via Cloudflare Workers AI — ver seção "Classificação de mensagens via LLM" |
 | GET | `/health` | — | Healthcheck, sem autenticação |
 | GET | `/metrics` | — | Métricas Prometheus, sem autenticação |
 
@@ -35,23 +34,17 @@ mínimo de 3 itens, para compatibilidade com os flows atuais do Octadesk.
 
 ## Classificação de mensagens via LLM
 
-Existem **dois backends em paralelo** enquanto a migração para a Cloudflare é
-validada em produção:
+A classificação roda via Cloudflare Workers AI
+(`@cf/meta/llama-3.1-8b-instruct-fp8-fast`), na rota
+`POST /v1/llm-cf-classifica-mensagem` (o nome mantém o sufixo `-cf-` porque é
+o que o flow do Octadesk já chama hoje). Antes rodava num modelo Ollama local
+(`qwen2.5:3b-instruct`) em paralelo, mas esse backend foi descontinuado: o
+Ollama tinha viés de classificar qualquer coisa "com cara de endereço"
+(rua/cidade) como `endereco` em vez de `vendas`, e a Cloudflare saiu bem mais
+rápida (~0.3-0.9s vs. 3-4s+) e mais precisa nos testes — ver `llm_expand.md`
+para o histórico da migração.
 
-| Rota | Backend | Status |
-|---|---|---|
-| `POST /v1/llm-classifica-mensagem` | Ollama local (`qwen2.5:3b-instruct`) | em produção, é o que o flow do Octadesk usa hoje |
-| `POST /v1/llm-cf-classifica-mensagem` | Cloudflare Workers AI (`@cf/meta/llama-3.1-8b-instruct-fp8-fast`) | rota nova, testar em paralelo antes de trocar o flow |
-
-Plano de corte: apontar o flow do Octadesk pra rota `-cf-` quando ela estiver
-validada, e só então desligar o serviço `ollama` do `compose.yaml` (que hoje
-usa até 14 núcleos da VM). As duas rotas aceitam o mesmo corpo e devolvem a
-mesma forma de resposta — só o campo `backend` nas métricas/logs muda (ver
-"Monitoramento" abaixo). Uma tentativa anterior de migrar direto (sem rota
-paralela) mandou clientes pro setor errado algumas vezes; testar as duas
-rotas lado a lado antes do corte evita repetir isso.
-
-Cada rota recebe **só a mensagem do cliente** (sem histórico, sem pergunta
+A rota recebe **só a mensagem do cliente** (sem histórico, sem pergunta
 anterior) e devolve o setor de destino:
 
 ```json
@@ -74,8 +67,8 @@ no if/else do flow do Octadesk):
 | `titular` | Trocar o titular do contrato, trocar o dono da conta, trocar quem paga | "quero trocar o titular", "trocar o dono da conta", "quero colocar o contrato no nome da minha esposa" |
 | `renovacao` | Renovar contrato existente, contrato vencendo, continuar no mesmo plano | "quero renovar o contrato", "meu contrato está vencendo" |
 | `ampliacao` | Aumentar velocidade/plano do contrato existente, pedir mais um roteador/ponto de rede | "quero aumentar a velocidade", "aumentar plano", "mais um roteador" |
-| `endereco` | Trocar/mudar o endereço de uma instalação já existente, trocar o ponto | "quero trocar o endereço", "vou mudar de casa, preciso trocar o ponto", "trocar o ponto" |
-| `vendas` | Endereço/localização/cobertura, contratação nova (endereço onde o cliente nunca teve serviço), planos, nova instalação; **inclui um endereço/bairro sozinho, sem mais contexto** — é a resposta típica à pergunta "qual o seu endereço?" feita a quem está pedindo cobertura/instalação nova | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?", "centro", "vila block sao sepe" |
+| `endereco` | Trocar/mudar o endereço de uma instalação já existente, trocar o ponto — só quando há verbo explícito de mudar/trocar/transferir; nunca só por a mensagem conter um endereço | "quero trocar o endereço", "vou mudar de casa, preciso trocar o ponto", "trocar o ponto" |
+| `vendas` | Endereço/localização/cobertura, contratação nova (endereço onde o cliente nunca teve serviço), planos, nova instalação; **inclui um endereço dito sozinho, sem verbo de mudar/trocar/transferir** — mesmo um endereço completo com rua e número, é a resposta típica à pergunta "qual o seu endereço?" feita a quem está pedindo cobertura/instalação nova | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?", "centro", "vila block sao sepe", "rua erechin 369" |
 | `atendimento` | Mensagem sem informação suficiente pra decidir com segurança (saudações, agradecimentos, pedido genérico, fragmento ambíguo) — a LLM prefere isso a arriscar um chute | "bom dia", "oi", "tenho uma dúvida" |
 
 Se houver mais de uma intenção na mesma mensagem (ex.: "sem internet e
@@ -99,26 +92,6 @@ a conversa. Esta rota:
 - em caso de falha, timeout ou resposta não interpretável do modelo, devolve
   erro (`llm_timeout` / 504, ou `llm_indisponivel`/`llm_resposta_invalida` /
   502) para o flow do Octadesk cair na fila de humanos.
-
-### Setup do Ollama (modelo `Qwen/Qwen2.5-3B-Instruct`)
-
-O `compose.yaml` já sobe um serviço `ollama` (imagem oficial `ollama/ollama`,
-sem exposição via Traefik — só a `api` fala com ele na rede interna). Depois
-de subir a stack, é preciso baixar o modelo base e criar o modelo
-classificador customizado a partir de `ollama/Modelfile`:
-
-```bash
-docker compose up -d ollama
-docker compose exec ollama ollama pull qwen2.5:3b-instruct
-docker compose exec ollama ollama create atendimento-classificador -f /modelfiles/Modelfile
-```
-
-`OLLAMA_MODEL` (em `.env`) precisa bater com o nome usado no `ollama create`
-acima. Para reaplicar mudanças no Modelfile, rode o `ollama create` de novo —
-ele substitui o modelo existente.
-
-Este serviço fica de pé até a Cloudflare (abaixo) ser validada em produção —
-ver o plano de corte na seção anterior.
 
 ### Setup da Cloudflare Workers AI
 
@@ -245,9 +218,9 @@ Prometheus + Grafana rodam como stack separada — ver `monitoring/README.md`.
 Dashboard já provisionado com requisições/erros/latência por rota, incluindo
 total de requisições por rota no período (pra ver quais rotas os clientes
 mais usam). As métricas de classificação (`mk_octadesk_llm_classificacao_total`
-e `mk_octadesk_llm_erros_total`) têm um label `backend` (`ollama` ou
-`cloudflare`) — útil pra comparar volume/distribuição de destino e taxa de
-erro dos dois backends lado a lado durante o período de validação.
+e `mk_octadesk_llm_erros_total`) têm um label `backend` (hoje sempre
+`cloudflare`) — útil pra ver volume/distribuição de destino e taxa de erro
+da classificação.
 
 ## Validação pós-deploy
 
@@ -264,14 +237,7 @@ curl --get 'https://api.newlifefibra.com.br/v1/consulta-conexao' \
 
 # Fluxo completo com dado real autorizado — espera 200
 
-# Classificação LLM (Ollama) — espera 200 com dados.destino em {vendas,renovacao,ampliacao,endereco,titular,cancelamento,financeiro,suporte,atendimento}
-curl -i https://api.newlifefibra.com.br/v1/llm-classifica-mensagem \
-  --request POST \
-  --header "X-API-Key: $CHATBOT_API_KEY" \
-  --header "Content-Type: application/json" \
-  --data '{"mensagem": "estou sem internet desde ontem"}'
-
-# Classificação LLM (Cloudflare) — mesma forma de resposta, rota nova em validação
+# Classificação LLM (Cloudflare) — espera 200 com dados.destino em {vendas,renovacao,ampliacao,endereco,titular,cancelamento,financeiro,suporte,atendimento}
 curl -i https://api.newlifefibra.com.br/v1/llm-cf-classifica-mensagem \
   --request POST \
   --header "X-API-Key: $CHATBOT_API_KEY" \

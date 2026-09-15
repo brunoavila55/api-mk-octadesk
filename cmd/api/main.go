@@ -26,23 +26,18 @@ func main() {
 	}
 
 	client := mk.NewClient(cfg)
-	llmClient := llm.NewClient(cfg)
 	cloudflareClient := llm.NewCloudflareClient(cfg)
-	handler := httpapi.NewHandler(client, llmClient, cloudflareClient, cfg.ChatbotAPIKey, logger)
+	handler := httpapi.NewHandler(client, cloudflareClient, cfg.ChatbotAPIKey, logger)
 
-	// WriteTimeout precisa acomodar o maior entre LLM_HTTP_TIMEOUT (Ollama) e
-	// CLOUDFLARE_HTTP_TIMEOUT (Cloudflare), além de alguma folga — sem isso o
-	// servidor cortaria a resposta antes do backend de classificação terminar.
-	llmTimeout := cfg.LLMHTTPTimeout
-	if cfg.CloudflareHTTPTimeout > llmTimeout {
-		llmTimeout = cfg.CloudflareHTTPTimeout
-	}
+	// WriteTimeout precisa acomodar CLOUDFLARE_HTTP_TIMEOUT, além de alguma
+	// folga — sem isso o servidor cortaria a resposta antes do backend de
+	// classificação terminar.
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      llmTimeout + 15*time.Second,
+		WriteTimeout:      cfg.CloudflareHTTPTimeout + 15*time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 

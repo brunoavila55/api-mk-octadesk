@@ -56,11 +56,11 @@ func newAPIMetrics() *apiMetrics {
 		}, []string{"resultado"}),
 		llmClassificacaoTotal: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "mk_octadesk_llm_classificacao_total",
-			Help: "Total de mensagens classificadas pela LLM, por backend (ollama, cloudflare) e destino (nunca inclui o texto da mensagem).",
+			Help: "Total de mensagens classificadas pela LLM, por backend e destino (nunca inclui o texto da mensagem).",
 		}, []string{"backend", "destino"}),
 		llmErrosTotal: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "mk_octadesk_llm_erros_total",
-			Help: "Total de erros ao classificar mensagens via LLM, por backend (ollama, cloudflare) e código de erro interno.",
+			Help: "Total de erros ao classificar mensagens via LLM, por backend e código de erro interno.",
 		}, []string{"backend", "codigo"}),
 		handler: promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
 	}

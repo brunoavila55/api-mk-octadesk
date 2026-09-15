@@ -1,3 +1,6 @@
+// Package llm implementa o cliente HTTP para o Cloudflare Workers AI, usado
+// para classificar a intenção de mensagens do cliente e decidir o setor de
+// destino no Octadesk. Nenhuma chamada ao MK acontece a partir deste pacote.
 package llm
 
 import (
@@ -14,14 +17,34 @@ import (
 	"api-mk-octadesk/internal/config"
 )
 
+const maxResponseBytes = 1 << 20 // 1 MiB — resposta da Cloudflare nunca deveria passar disso.
+
+// destinosValidos são os únicos setores que o Octadesk sabe rotear.
+var destinosValidos = map[string]bool{
+	"vendas":       true,
+	"renovacao":    true,
+	"ampliacao":    true,
+	"endereco":     true,
+	"titular":      true,
+	"cancelamento": true,
+	"financeiro":   true,
+	"suporte":      true,
+	"atendimento":  true,
+}
+
+// ErrRespostaInvalida indica que a Cloudflare respondeu, mas o conteúdo não
+// pôde ser interpretado como uma classificação válida (JSON malformado ou
+// destino fora do conjunto conhecido).
+var ErrRespostaInvalida = errors.New("cloudflare retornou uma resposta que não pôde ser interpretada")
+
+type classificacao struct {
+	DestinoPrincipal string `json:"destino_principal"`
+}
+
 // CloudflareClient implementa o cliente HTTP para o Cloudflare Workers AI,
 // usado para classificar a intenção de mensagens do cliente e decidir o
 // setor de destino no Octadesk. Nenhuma chamada ao MK acontece a partir
 // deste arquivo.
-//
-// Convive em paralelo com o Client (Ollama) enquanto a classificação é
-// validada em produção via a rota /v1/llm-cf-classifica-mensagem — ver
-// internal/httpapi/handlers.go e README.md.
 type CloudflareClient struct {
 	baseURL    *url.URL
 	accountID  string
@@ -99,10 +122,7 @@ var destinosValidosOrdenados = []string{
 	"cancelamento", "financeiro", "suporte", "atendimento",
 }
 
-// cfSystemPrompt é a mesma política de classificação do ollama/Modelfile,
-// adaptada para mensagens de chat em vez de Modelfile — qualquer mudança de
-// regra deve ser replicada nos dois lugares enquanto ambos os backends
-// estiverem em uso. Ver llm_expand.md, seção 4.
+// cfSystemPrompt define as regras de classificação — ver llm_expand.md.
 const cfSystemPrompt = `Você classifica UMA mensagem de cliente de um provedor de internet.
 Use somente a mensagem recebida. Não converse, não responda dúvidas e não invente contexto.
 
@@ -116,15 +136,15 @@ Destinos:
 - titular: mudar titular, dono ou responsável pela conta; contrato no nome de outra pessoa.
 - renovacao: renovar contrato; contrato vencendo/vencido; fim de fidelidade; continuar com o mesmo plano.
 - ampliacao: aumentar velocidade; upgrade do plano atual; roteador, ponto, repetidor ou mesh adicional.
-- endereco: mudar ou transferir serviço/instalação existente para outro endereço ou ponto (só quando fica claro que já é cliente com serviço ativo).
-- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo; um endereço ou bairro sozinho, sem mais contexto (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova).
+- endereco: só quando há verbo explícito de mudar/trocar/transferir o serviço/instalação já existente para outro lugar (só quando fica claro que já é cliente com serviço ativo). Um endereço sozinho, mesmo completo (rua e número), NUNCA é endereco.
+- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo; um endereço dito sozinho, sem verbo de mudar/trocar/transferir — rua, número, bairro ou combinação, mesmo formatado como endereço completo (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova).
 - atendimento: saudação, agradecimento, pedido genérico, fragmento ou informação insuficiente.
 
 Regras:
 - internet lenta sem pedido explícito de upgrade = suporte.
 - novo serviço em outro endereço = vendas.
-- mover serviço já existente = endereco.
-- endereço ou bairro sozinho, sem mais contexto = vendas.
+- mover serviço já existente = endereco, e só com verbo explícito de mudança (mudar/trocar/transferir) — nunca só por conter rua e número.
+- um endereço dito sozinho, sem verbo de mudar/trocar/transferir, é resposta a "qual o seu endereço?" = vendas, mesmo que seja um endereço completo com rua e número (ex.: "rua erechin 369").
 - "contrato" sozinho = financeiro.
 - na dúvida entre um destino específico e atendimento = atendimento.
 
@@ -134,7 +154,7 @@ suporte > cancelamento > financeiro > titular > renovacao > ampliacao > endereco
 Valores permitidos:
 vendas, renovacao, ampliacao, endereco, titular, cancelamento, financeiro, suporte, atendimento.`
 
-// cfExemplos são os mesmos pares few-shot do ollama/Modelfile.
+// cfExemplos são os pares few-shot que ensinam o modelo a classificar.
 var cfExemplos = []cfMessage{
 	{Role: "user", Content: "estou sem internet e também preciso do boleto que vence amanhã"},
 	{Role: "assistant", Content: `{"destino_principal":"suporte"}`},
@@ -170,6 +190,8 @@ var cfExemplos = []cfMessage{
 	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
 	{Role: "user", Content: "vila block sao sepe"},
 	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
+	{Role: "user", Content: "rua erechin 369"},
+	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
 	{Role: "user", Content: "minha internet está muito lenta desde ontem"},
 	{Role: "assistant", Content: `{"destino_principal":"suporte"}`},
 	{Role: "user", Content: "quero renovar o contrato"},
@@ -201,15 +223,14 @@ func buildCfMessages(mensagem string) []cfMessage {
 }
 
 // ErrNaoConfigurado indica que CLOUDFLARE_ACCOUNT_ID ou CLOUDFLARE_API_TOKEN
-// não foram definidos. Deliberadamente não é um erro fatal de config.Load —
-// ver o comentário lá — então a rota /v1/llm-cf-classifica-mensagem devolve
-// esse erro (502 llm_indisponivel) até alguém configurar as credenciais,
-// sem afetar a rota do Ollama nem o resto da API.
+// não foram definidos. config.Load já falha o boot sem essas variáveis; este
+// erro só é alcançável se alguém construir CloudflareClient sem passar por
+// config.Load.
 var ErrNaoConfigurado = errors.New("cloudflare workers ai não configurado: defina CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN")
 
 // Classifica envia a mensagem do cliente ao Cloudflare Workers AI e devolve
-// o setor de destino, nos mesmos termos do Client (Ollama) — ver o
-// comentário de Client.Classifica.
+// o setor de destino: "vendas", "renovacao", "ampliacao", "endereco",
+// "titular", "cancelamento", "financeiro", "suporte" ou "atendimento".
 func (client *CloudflareClient) Classifica(ctx context.Context, mensagem string) (string, error) {
 	if client.accountID == "" || client.apiToken == "" {
 		return "", ErrNaoConfigurado
