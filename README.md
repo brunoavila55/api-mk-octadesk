@@ -25,7 +25,7 @@ ou, em caso de erro:
 | GET | `/v1/gera-boleto` | `cd_cliente` | Segunda via das faturas pendentes relevantes |
 | GET | `/v1/gera-pix` | `cd_cliente` | Código PIX copia-e-cola das faturas pendentes relevantes |
 | GET | `/v1/autodesbloqueio` | `cd_conexao` | Solicita desbloqueio automático (ação — MK limita a 1x/mês) |
-| POST | `/v1/llm-cf-classifica-mensagem` | corpo `{"mensagem": "..."}` | Classifica a mensagem do cliente em um setor (`vendas`, `renovacao`, `ampliacao`, `endereco`, `titular`, `cancelamento`, `financeiro`, `suporte` ou `atendimento`) via Cloudflare Workers AI — ver seção "Classificação de mensagens via LLM" |
+| POST | `/v1/llm-cf-classifica-mensagem` | corpo `{"mensagem": "..."}` | Classifica a mensagem do cliente em um setor (`vendas`, `renovacao`, `ampliacao`, `relacionamento`, `titular`, `cancelamento`, `financeiro`, `suporte` ou `atendimento`) via Cloudflare Workers AI — ver seção "Classificação de mensagens via LLM" |
 | GET | `/health` | — | Healthcheck, sem autenticação |
 | GET | `/metrics` | — | Métricas Prometheus, sem autenticação |
 
@@ -67,14 +67,14 @@ no if/else do flow do Octadesk):
 | `titular` | Trocar o titular do contrato, trocar o dono da conta, trocar quem paga | "quero trocar o titular", "trocar o dono da conta", "quero colocar o contrato no nome da minha esposa" |
 | `renovacao` | Renovar contrato existente, contrato vencendo, continuar no mesmo plano | "quero renovar o contrato", "meu contrato está vencendo" |
 | `ampliacao` | Aumentar velocidade/plano do contrato existente, pedir mais um roteador/ponto de rede | "quero aumentar a velocidade", "aumentar plano", "mais um roteador" |
-| `endereco` | Trocar/mudar o endereço de uma instalação já existente, trocar o ponto — só quando há verbo explícito de mudar/trocar/transferir; nunca só por a mensagem conter um endereço | "quero trocar o endereço", "vou mudar de casa, preciso trocar o ponto", "trocar o ponto" |
+| `relacionamento` | Cliente já ativo pedindo pra mudar o serviço/instalação de lugar — mudança de casa, trocar o ponto, transferir o serviço atual — só quando há verbo/expressão explícita de mudança; nunca só por a mensagem conter um endereço | "quero trocar o endereço", "vou mudar de casa, preciso trocar o ponto", "trocar o ponto", "vou mudar de casa semana que vem, preciso transferir a internet" |
 | `vendas` | Endereço/localização/cobertura, contratação nova (endereço onde o cliente nunca teve serviço), planos, nova instalação; **inclui um endereço dito sozinho, sem verbo de mudar/trocar/transferir** — mesmo um endereço completo com rua e número, é a resposta típica à pergunta "qual o seu endereço?" feita a quem está pedindo cobertura/instalação nova | "quero contratar internet", "vocês atendem no meu bairro?", "quais os planos?", "centro", "vila block sao sepe", "rua erechin 369" |
 | `atendimento` | Mensagem sem informação suficiente pra decidir com segurança (saudações, agradecimentos, pedido genérico, fragmento ambíguo) — a LLM prefere isso a arriscar um chute | "bom dia", "oi", "tenho uma dúvida" |
 
 Se houver mais de uma intenção na mesma mensagem (ex.: "sem internet e
 preciso do boleto"), a LLM decide sozinha o `destino` mais urgente, nesta
 prioridade: `suporte` > `cancelamento` > `financeiro` > `titular` >
-`renovacao` > `ampliacao` > `endereco` > `vendas` > `atendimento`.
+`renovacao` > `ampliacao` > `relacionamento` > `vendas` > `atendimento`.
 
 Em caso de erro/timeout na chamada (ver lista de códigos abaixo), a rota não
 devolve nenhum desses 4 valores — devolve `status: "erro"` com HTTP 502/504,
@@ -237,7 +237,7 @@ curl --get 'https://api.newlifefibra.com.br/v1/consulta-conexao' \
 
 # Fluxo completo com dado real autorizado — espera 200
 
-# Classificação LLM (Cloudflare) — espera 200 com dados.destino em {vendas,renovacao,ampliacao,endereco,titular,cancelamento,financeiro,suporte,atendimento}
+# Classificação LLM (Cloudflare) — espera 200 com dados.destino em {vendas,renovacao,ampliacao,relacionamento,titular,cancelamento,financeiro,suporte,atendimento}
 curl -i https://api.newlifefibra.com.br/v1/llm-cf-classifica-mensagem \
   --request POST \
   --header "X-API-Key: $CHATBOT_API_KEY" \

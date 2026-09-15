@@ -56,10 +56,10 @@ rota Ollama em paralelo — ver seção 9) mesmo sendo hoje o único backend.
 
 Ver a tabela completa no `README.md` (seção "Classificação de mensagens via
 LLM"). Resumo: `suporte`, `cancelamento`, `financeiro`, `titular`,
-`renovacao`, `ampliacao`, `endereco`, `vendas`, `atendimento` — com
+`renovacao`, `ampliacao`, `relacionamento`, `vendas`, `atendimento` — com
 prioridade `suporte > cancelamento > financeiro > titular > renovacao >
-ampliacao > endereco > vendas > atendimento` quando a mensagem tem mais
-de uma intenção.
+ampliacao > relacionamento > vendas > atendimento` quando a mensagem tem
+mais de uma intenção.
 
 ## 4. Como mudar o prompt ("a pergunta" que a LLM responde)
 
@@ -183,11 +183,15 @@ existe teste automatizado de qualidade, só validação manual.
   migrar pro plano pago.
 - **Timeout**: `CLOUDFLARE_HTTP_TIMEOUT` (padrão 45s, ver `.env.example`).
   Ajustar com base na latência real observada (Grafana) se necessário.
-- **Nomes de destino podem mudar independente do conteúdo do prompt.** Ex.:
-  `trocaendereco`/`trocatitular` viraram `endereco`/`titular` (nomes mais
-  curtos, mesmo significado) numa revisão anterior, quando o backend ainda
-  era Ollama. Renomear um destino existente exige os mesmos passos de
-  adicionar um novo (seção 5): atualizar `cfSystemPrompt`/`cfExemplos`,
+- **Nomes de destino podem mudar independente do conteúdo do prompt.**
+  Dois exemplos reais: `trocaendereco`/`trocatitular` viraram
+  `endereco`/`titular` (nomes mais curtos, mesmo significado) numa revisão
+  quando o backend ainda era Ollama; depois, já na Cloudflare, `endereco`
+  virou `relacionamento` — o nome antigo colidia com a própria palavra
+  "endereço" que aparece nas mensagens de `vendas`, o que ajudava o modelo a
+  confundir "a mensagem tem um endereço" com "o destino é sobre endereço".
+  Renomear um destino existente exige os mesmos passos de adicionar um novo
+  (seção 5): atualizar `cfSystemPrompt`/`cfExemplos`,
   `destinosValidos`/`destinosValidosOrdenados`, `README.md`, e
   rebuildar/redeployar a `api`. **E mais um passo que só existe pra rename,
   não pra destino novo**: o flow do Octadesk que já estava configurado pra

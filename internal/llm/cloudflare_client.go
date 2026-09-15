@@ -21,15 +21,15 @@ const maxResponseBytes = 1 << 20 // 1 MiB — resposta da Cloudflare nunca dever
 
 // destinosValidos são os únicos setores que o Octadesk sabe rotear.
 var destinosValidos = map[string]bool{
-	"vendas":       true,
-	"renovacao":    true,
-	"ampliacao":    true,
-	"endereco":     true,
-	"titular":      true,
-	"cancelamento": true,
-	"financeiro":   true,
-	"suporte":      true,
-	"atendimento":  true,
+	"vendas":         true,
+	"renovacao":      true,
+	"ampliacao":      true,
+	"relacionamento": true,
+	"titular":        true,
+	"cancelamento":   true,
+	"financeiro":     true,
+	"suporte":        true,
+	"atendimento":    true,
 }
 
 // ErrRespostaInvalida indica que a Cloudflare respondeu, mas o conteúdo não
@@ -118,7 +118,7 @@ var classificacaoJSONSchema = map[string]any{
 }
 
 var destinosValidosOrdenados = []string{
-	"vendas", "renovacao", "ampliacao", "endereco", "titular",
+	"vendas", "renovacao", "ampliacao", "relacionamento", "titular",
 	"cancelamento", "financeiro", "suporte", "atendimento",
 }
 
@@ -136,23 +136,24 @@ Destinos:
 - titular: mudar titular, dono ou responsável pela conta; contrato no nome de outra pessoa.
 - renovacao: renovar contrato; contrato vencendo/vencido; fim de fidelidade; continuar com o mesmo plano.
 - ampliacao: aumentar velocidade; upgrade do plano atual; roteador, ponto, repetidor ou mesh adicional.
-- endereco: só quando há verbo explícito de mudar/trocar/transferir o serviço/instalação já existente para outro lugar (só quando fica claro que já é cliente com serviço ativo). Um endereço sozinho, mesmo completo (rua e número), NUNCA é endereco.
-- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo; um endereço dito sozinho, sem verbo de mudar/trocar/transferir — rua, número, bairro ou combinação, mesmo formatado como endereço completo (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova).
+- relacionamento: cliente já ativo pedindo pra mudar o serviço/instalação de lugar. Exige verbo/expressão explícita de mudança ("mudar de casa", "mudar de lugar", "me mudar", "mudei de endereço", "trocar o ponto", "transferir o serviço") E deixar claro que é sobre o serviço atual, não um endereço novo pra contratar. Um endereço sozinho, mesmo completo (rua e número), NUNCA é relacionamento — isso é vendas (ver abaixo).
+- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo (inclusive quando o cliente fala em se mudar mas ainda está checando se tem cobertura, sem confirmar que já vai transferir o serviço); um endereço dito sozinho, sem verbo de mudança — rua, número, bairro ou combinação, mesmo formatado como endereço completo (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova).
 - atendimento: saudação, agradecimento, pedido genérico, fragmento ou informação insuficiente.
 
 Regras:
 - internet lenta sem pedido explícito de upgrade = suporte.
 - novo serviço em outro endereço = vendas.
-- mover serviço já existente = endereco, e só com verbo explícito de mudança (mudar/trocar/transferir) — nunca só por conter rua e número.
-- um endereço dito sozinho, sem verbo de mudar/trocar/transferir, é resposta a "qual o seu endereço?" = vendas, mesmo que seja um endereço completo com rua e número (ex.: "rua erechin 369").
+- checar se tem cobertura num lugar que o cliente cogita se mudar, sem confirmar a mudança = vendas (é sondagem, não pedido de transferência).
+- mudar/trocar/transferir o serviço já existente de lugar = relacionamento — só com verbo/expressão explícita de mudança, nunca só por a mensagem conter rua e número.
+- um endereço dito sozinho, sem verbo de mudança, é resposta a "qual o seu endereço?" = vendas, mesmo que seja um endereço completo com rua e número (ex.: "rua erechin 369").
 - "contrato" sozinho = financeiro.
 - na dúvida entre um destino específico e atendimento = atendimento.
 
 Se houver várias intenções, prioridade:
-suporte > cancelamento > financeiro > titular > renovacao > ampliacao > endereco > vendas > atendimento.
+suporte > cancelamento > financeiro > titular > renovacao > ampliacao > relacionamento > vendas > atendimento.
 
 Valores permitidos:
-vendas, renovacao, ampliacao, endereco, titular, cancelamento, financeiro, suporte, atendimento.`
+vendas, renovacao, ampliacao, relacionamento, titular, cancelamento, financeiro, suporte, atendimento.`
 
 // cfExemplos são os pares few-shot que ensinam o modelo a classificar.
 var cfExemplos = []cfMessage{
@@ -171,11 +172,17 @@ var cfExemplos = []cfMessage{
 	{Role: "user", Content: "queria saber os planos para instalar internet lá em casa"},
 	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
 	{Role: "user", Content: "quero mudar meu endereço, vou me mudar para o centro"},
-	{Role: "assistant", Content: `{"destino_principal":"endereco"}`},
+	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
 	{Role: "user", Content: "trocar o ponto"},
-	{Role: "assistant", Content: `{"destino_principal":"endereco"}`},
+	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
 	{Role: "user", Content: "dá pra transferir minha internet pra outro endereço?"},
-	{Role: "assistant", Content: `{"destino_principal":"endereco"}`},
+	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
+	{Role: "user", Content: "vou mudar de casa semana que vem, preciso transferir a internet"},
+	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
+	{Role: "user", Content: "se eu mudar de lugar, dá pra levar o serviço junto?"},
+	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
+	{Role: "user", Content: "estou pensando em mudar pro bairro Vila Nova, vocês têm cobertura lá?"},
+	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
 	{Role: "user", Content: "quero trocar o titular"},
 	{Role: "assistant", Content: `{"destino_principal":"titular"}`},
 	{Role: "user", Content: "trocar o dono da conta"},
@@ -229,7 +236,7 @@ func buildCfMessages(mensagem string) []cfMessage {
 var ErrNaoConfigurado = errors.New("cloudflare workers ai não configurado: defina CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN")
 
 // Classifica envia a mensagem do cliente ao Cloudflare Workers AI e devolve
-// o setor de destino: "vendas", "renovacao", "ampliacao", "endereco",
+// o setor de destino: "vendas", "renovacao", "ampliacao", "relacionamento",
 // "titular", "cancelamento", "financeiro", "suporte" ou "atendimento".
 func (client *CloudflareClient) Classifica(ctx context.Context, mensagem string) (string, error) {
 	if client.accountID == "" || client.apiToken == "" {
