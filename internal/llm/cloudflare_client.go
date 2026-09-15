@@ -136,7 +136,7 @@ Destinos:
 - titular: mudar titular, dono ou responsável pela conta; contrato no nome de outra pessoa.
 - renovacao: renovar contrato; contrato vencendo/vencido; fim de fidelidade; continuar com o mesmo plano.
 - ampliacao: aumentar velocidade; upgrade do plano atual; roteador, ponto, repetidor ou mesh adicional.
-- relacionamento: cliente já ativo pedindo pra mudar o serviço/instalação de lugar. Exige verbo/expressão explícita de mudança ("mudar de casa", "mudar de lugar", "me mudar", "mudei de endereço", "trocar o ponto", "transferir o serviço") E deixar claro que é sobre o serviço atual, não um endereço novo pra contratar. Um endereço sozinho, mesmo completo (rua e número), NUNCA é relacionamento — isso é vendas (ver abaixo).
+- relacionamento: cliente já ativo pedindo pra mudar o serviço/instalação de lugar, ou pra atualizar o endereço/cadastro depois de já ter se mudado. Exige verbo/expressão explícita de mudança ("mudar de casa", "mudar de lugar", "me mudar", "mudei de endereço", "trocar o ponto", "transferir o serviço", "atualizar o endereço/cadastro") E deixar claro que é sobre o serviço atual, não um endereço novo pra contratar. Um endereço sozinho, mesmo completo (rua e número), NUNCA é relacionamento — isso é vendas (ver abaixo).
 - vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo (inclusive quando o cliente fala em se mudar mas ainda está checando se tem cobertura, sem confirmar que já vai transferir o serviço); um endereço dito sozinho, sem verbo de mudança — rua, número, bairro ou combinação, mesmo formatado como endereço completo (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova).
 - atendimento: saudação, agradecimento, pedido genérico, fragmento ou informação insuficiente.
 
@@ -144,7 +144,7 @@ Regras:
 - internet lenta sem pedido explícito de upgrade = suporte.
 - novo serviço em outro endereço = vendas.
 - checar se tem cobertura num lugar que o cliente cogita se mudar, sem confirmar a mudança = vendas (é sondagem, não pedido de transferência).
-- mudar/trocar/transferir o serviço já existente de lugar = relacionamento — só com verbo/expressão explícita de mudança, nunca só por a mensagem conter rua e número.
+- mudar/trocar/transferir/atualizar o serviço/endereço já existente = relacionamento — só com verbo/expressão explícita de mudança, nunca só por a mensagem conter rua e número.
 - um endereço dito sozinho, sem verbo de mudança, é resposta a "qual o seu endereço?" = vendas, mesmo que seja um endereço completo com rua e número (ex.: "rua erechin 369").
 - "contrato" sozinho = financeiro.
 - na dúvida entre um destino específico e atendimento = atendimento.
@@ -180,6 +180,8 @@ var cfExemplos = []cfMessage{
 	{Role: "user", Content: "vou mudar de casa semana que vem, preciso transferir a internet"},
 	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
 	{Role: "user", Content: "se eu mudar de lugar, dá pra levar o serviço junto?"},
+	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
+	{Role: "user", Content: "preciso atualizar meu endereço no cadastro, mudei há 2 meses"},
 	{Role: "assistant", Content: `{"destino_principal":"relacionamento"}`},
 	{Role: "user", Content: "estou pensando em mudar pro bairro Vila Nova, vocês têm cobertura lá?"},
 	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
