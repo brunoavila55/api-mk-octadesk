@@ -212,6 +212,13 @@ existe teste automatizado de qualidade, só validação manual.
   interpretar como o cliente falando de outra cidade em vez do próprio
   endereço. Corrigido junto com o caso acima, no mesmo padrão (regra +
   few-shot em `cfSystemPrompt`/`cfExemplos`).
+- **Avisar que o boleto já está pago caiu em `cancelamento`**: caso real —
+  "esse boleto ta pago" foi classificado como `cancelamento`, sem nenhum
+  pedido de encerrar o serviço na mensagem. Hipótese: o modelo associou
+  "reclamação sobre cobrança" a cancelamento em vez de financeiro. Corrigido
+  com regra explícita ("avisar/contestar boleto pago = financeiro, só é
+  cancelamento com pedido explícito de cancelar/encerrar") e exemplos
+  few-shot em `cfSystemPrompt`/`cfExemplos`.
 - **Monitoramento**: o dashboard "API MK Octadesk" no Grafana tem painéis de
   classificação por destino, erros por código, latência p95 da rota, e
   CPU/memória do host (via `node-exporter`) — útil pra acompanhar se o
