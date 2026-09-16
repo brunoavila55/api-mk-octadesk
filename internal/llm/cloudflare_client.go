@@ -137,7 +137,7 @@ Destinos:
 - renovacao: renovar contrato; contrato vencendo/vencido; fim de fidelidade; continuar com o mesmo plano.
 - ampliacao: aumentar velocidade; upgrade do plano atual; roteador, ponto, repetidor ou mesh adicional.
 - relacionamento: cliente já ativo pedindo pra mudar o serviço/instalação de lugar, ou pra atualizar o endereço/cadastro depois de já ter se mudado. Exige verbo/expressão explícita de mudança ("mudar de casa", "mudar de lugar", "me mudar", "mudei de endereço", "trocar o ponto", "transferir o serviço", "atualizar o endereço/cadastro") E deixar claro que é sobre o serviço atual, não um endereço novo pra contratar. Um endereço sozinho, mesmo completo (rua e número), NUNCA é relacionamento — isso é vendas (ver abaixo).
-- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo (inclusive quando o cliente fala em se mudar mas ainda está checando se tem cobertura, sem confirmar que já vai transferir o serviço); um endereço dito sozinho, sem verbo de mudança — rua, número, bairro ou combinação, mesmo formatado como endereço completo (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova). Inclui nome de rua que parece uma data — comum em bairros com ruas batizadas com datas de feriados, ex.: "7 de Setembro", "15 de Novembro", "21 de Abril" — seguido de número: isso é endereço, não uma data isolada.
+- vendas: novo contrato/instalação; planos/preços para contratar; cobertura em endereço novo (inclusive quando o cliente fala em se mudar mas ainda está checando se tem cobertura, sem confirmar que já vai transferir o serviço); um endereço dito sozinho, sem verbo de mudança — rua, número, bairro ou combinação, mesmo formatado como endereço completo (resposta típica à pergunta "qual o seu endereço?", feita a quem está pedindo cobertura/instalação nova). Inclui nome de rua que parece uma data — comum em bairros com ruas batizadas com datas de feriados, ex.: "7 de Setembro", "15 de Novembro", "21 de Abril" — seguido de número: isso é endereço, não uma data isolada. Inclui também nome de rua que coincide com nome de cidade — comum na região, ex.: "Avenida Pelotas", "Rua Santa Maria", "Rua Alegrete" — precedido de "rua"/"avenida" ou dito como resposta a "qual o seu endereço?": isso é o nome da rua, não uma cidade diferente sendo mencionada.
 - atendimento: saudação, agradecimento, pedido genérico, fragmento ou informação insuficiente.
 
 Regras:
@@ -147,6 +147,7 @@ Regras:
 - mudar/trocar/transferir/atualizar o serviço/endereço já existente = relacionamento — só com verbo/expressão explícita de mudança, nunca só por a mensagem conter rua e número.
 - um endereço dito sozinho, sem verbo de mudança, é resposta a "qual o seu endereço?" = vendas, mesmo que seja um endereço completo com rua e número (ex.: "rua erechin 369").
 - nome de rua que parece uma data (ex.: "21 de abril", "20 de setembro", "15 de novembro") seguido de número = endereço = vendas, não atendimento — não confunda com uma data isolada.
+- nome de rua que coincide com nome de cidade (ex.: "avenida pelotas", "rua santa maria", "rua alegrete") = endereço = vendas — não confunda com o cliente falando de outra cidade.
 - "contrato" sozinho = financeiro.
 - na dúvida entre um destino específico e atendimento = atendimento.
 
@@ -205,6 +206,12 @@ var cfExemplos = []cfMessage{
 	{Role: "user", Content: "21 de abril 1746"},
 	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
 	{Role: "user", Content: "rua 20 de setembro 456"},
+	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
+	{Role: "user", Content: "avenida pelotas 500"},
+	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
+	{Role: "user", Content: "rua santa maria"},
+	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
+	{Role: "user", Content: "rua alegrete 45"},
 	{Role: "assistant", Content: `{"destino_principal":"vendas"}`},
 	{Role: "user", Content: "minha internet está muito lenta desde ontem"},
 	{Role: "assistant", Content: `{"destino_principal":"suporte"}`},
