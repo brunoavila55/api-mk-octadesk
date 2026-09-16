@@ -198,6 +198,14 @@ existe teste automatizado de qualidade, só validação manual.
   ler o valor antigo precisa ser atualizado pro nome novo — sem isso, o
   if/else do flow não reconhece o valor novo e a conversa cai no branch
   errado (ou nenhum).
+- **Nome de rua pode parecer data**: caso real em produção — cliente
+  respondeu "21 de abril 1746" pra "Para qual endereço você deseja
+  contratar a nossa internet?" e foi classificado errado, porque "21 de
+  abril" isolado parece uma data, não uma rua. Na região atendida há vários
+  bairros com ruas batizadas com datas de feriados (ex.: 7 de Setembro, 15
+  de Novembro, 20 de Setembro), então "<data> <número>" sozinho deve ser
+  tratado como endereço = `vendas`. Corrigido em `cfSystemPrompt` (seção
+  "vendas" e regras) e `cfExemplos` — ver `internal/llm/cloudflare_client.go`.
 - **Monitoramento**: o dashboard "API MK Octadesk" no Grafana tem painéis de
   classificação por destino, erros por código, latência p95 da rota, e
   CPU/memória do host (via `node-exporter`) — útil pra acompanhar se o
