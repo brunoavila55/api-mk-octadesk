@@ -206,6 +206,12 @@ existe teste automatizado de qualidade, só validação manual.
   de Novembro, 20 de Setembro), então "<data> <número>" sozinho deve ser
   tratado como endereço = `vendas`. Corrigido em `cfSystemPrompt` (seção
   "vendas" e regras) e `cfExemplos` — ver `internal/llm/cloudflare_client.go`.
+- **Nome de rua pode coincidir com nome de cidade**: mesma família de
+  problema — a região tem ruas chamadas "Avenida Pelotas", "Rua Santa
+  Maria", "Rua Alegrete" (nomes de cidades do RS), com risco de o modelo
+  interpretar como o cliente falando de outra cidade em vez do próprio
+  endereço. Corrigido junto com o caso acima, no mesmo padrão (regra +
+  few-shot em `cfSystemPrompt`/`cfExemplos`).
 - **Monitoramento**: o dashboard "API MK Octadesk" no Grafana tem painéis de
   classificação por destino, erros por código, latência p95 da rota, e
   CPU/memória do host (via `node-exporter`) — útil pra acompanhar se o
