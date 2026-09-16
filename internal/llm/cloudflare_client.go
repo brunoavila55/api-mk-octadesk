@@ -132,7 +132,7 @@ Responda exatamente:
 Destinos:
 - suporte: falha técnica; sem internet; caiu; lenta/ruim/oscilando; modem, roteador, sinal, luz vermelha, Wi-Fi sem conexão.
 - cancelamento: cancelar ou encerrar contrato/serviço; não quer mais o serviço.
-- financeiro: boleto, 2ª via, fatura, pagamento, cobrança, PIX, mensalidade, vencimento, dívida, débito, comprovante, código de barras, negociação. "contrato" sozinho = financeiro.
+- financeiro: boleto, 2ª via, fatura, pagamento, cobrança, PIX, mensalidade, vencimento, dívida, débito, comprovante, código de barras, negociação. "contrato" sozinho = financeiro. Avisar ou contestar que um boleto/fatura já está pago (ex.: "esse boleto tá pago") também é financeiro — não tem nenhum pedido de cancelar o serviço.
 - titular: mudar titular, dono ou responsável pela conta; contrato no nome de outra pessoa.
 - renovacao: renovar contrato; contrato vencendo/vencido; fim de fidelidade; continuar com o mesmo plano.
 - ampliacao: aumentar velocidade; upgrade do plano atual; roteador, ponto, repetidor ou mesh adicional.
@@ -149,6 +149,7 @@ Regras:
 - nome de rua que parece uma data (ex.: "21 de abril", "20 de setembro", "15 de novembro") seguido de número = endereço = vendas, não atendimento — não confunda com uma data isolada.
 - nome de rua que coincide com nome de cidade (ex.: "avenida pelotas", "rua santa maria", "rua alegrete") = endereço = vendas — não confunda com o cliente falando de outra cidade.
 - "contrato" sozinho = financeiro.
+- avisar/contestar que boleto/fatura já está pago = financeiro, não cancelamento — só é cancelamento se o cliente pedir explicitamente pra cancelar/encerrar o serviço.
 - na dúvida entre um destino específico e atendimento = atendimento.
 
 Se houver várias intenções, prioridade:
@@ -164,6 +165,10 @@ var cfExemplos = []cfMessage{
 	{Role: "user", Content: "quero a segunda via do boleto"},
 	{Role: "assistant", Content: `{"destino_principal":"financeiro"}`},
 	{Role: "user", Content: "contrato"},
+	{Role: "assistant", Content: `{"destino_principal":"financeiro"}`},
+	{Role: "user", Content: "esse boleto tá pago"},
+	{Role: "assistant", Content: `{"destino_principal":"financeiro"}`},
+	{Role: "user", Content: "já paguei essa fatura, por que ainda aparece em aberto?"},
 	{Role: "assistant", Content: `{"destino_principal":"financeiro"}`},
 	{Role: "user", Content: "a net aqui morreu ontem"},
 	{Role: "assistant", Content: `{"destino_principal":"suporte"}`},
